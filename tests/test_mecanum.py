@@ -32,11 +32,11 @@ class MecanumTests(unittest.TestCase):
         speeds = MecanumMixer(rotation_gain=1.0).wheel_speeds(forward=1.0, strafe=1.0, rotate=1.0)
         self.assertEqual(speeds.as_dict(), {"FL": -1 / 3, "FR": 1.0, "RL": 1 / 3, "RR": 1 / 3})
 
-    def test_dualsense_mapping_honors_trigger_gates(self) -> None:
+    def test_dualsense_mapping_does_not_require_l2_for_translation(self) -> None:
         state = ControllerState(
             left_stick=AnalogStick(0.4, 0.6),
             right_stick=AnalogStick(0.5, 0.0),
-            buttons={Button.L2: True, Button.R2: False},
+            buttons={Button.L2: False, Button.R2: False},
         )
         command = DualSenseMotionMapping(deadzone=0.0).command(state)
         self.assertEqual(command, MotionCommand(forward=0.6, strafe=0.4, rotate=0.0))

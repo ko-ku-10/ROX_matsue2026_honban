@@ -129,13 +129,13 @@ class MecanumMixer:
 class DualSenseMotionMapping:
     """DualSense 状態から移動指令を作る規則。
 
-    既定では左スティックが前後・平行移動、右スティック X が旋回。L2 を
-    押している間だけ平行移動、R2 を押している間だけ旋回するため、元の
-    ``mecanum_rc.py`` と同じ安全な操作感になる。
+    既定では左スティックが前後・平行移動、右スティック X が旋回。移動は
+    常に有効で、R2 を押している間だけ旋回する。L2 は移動許可に使わないため、
+    他の用途へ自由に割り当てられる。
     """
 
     deadzone: float = 0.08
-    translation_enable: Button | None = Button.L2
+    translation_enable: Button | None = None
     rotation_enable: Button | None = Button.R2
     translation_gain: float = 1.0
     rotation_gain: float = 1.0

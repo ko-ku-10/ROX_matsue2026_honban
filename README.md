@@ -98,7 +98,7 @@ command = mapping.command(state)
 wheel_speeds = mixer.mix(command)
 ```
 
-既定の `DualSenseMotionMapping` は元プログラムと同じく L2 押下中のみ移動、R2 押下中のみ旋回を許可します。常に有効にするには `DualSenseMotionMapping(translation_enable=None, rotation_enable=None)` を指定します。
+既定の `DualSenseMotionMapping` は左スティックの移動を常に有効にし、R2 押下中のみ旋回を許可します。L2 は移動許可には使わず、ボタン入力として他の操作に自由に割り当てられます。旋回も常に有効にするには `DualSenseMotionMapping(rotation_enable=None)` を指定します。
 
 ## 実機への送信
 
