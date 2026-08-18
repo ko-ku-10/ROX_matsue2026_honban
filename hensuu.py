@@ -50,8 +50,16 @@ mecanum_motor_directions = {"FL": 1.0, "FR": -1.0, "RL": 1.0, "RR": -1.0}
 mechanism_motor_id = 0x05
 mechanism_min_position_deg = -30.0
 mechanism_max_position_deg = 90.0
-mechanism_max_command = 0.15       # 初回は低速で確認する
-mechanism_position_kp = 0.015      # 角度誤差[deg]から速度を作る係数
+# 速度上限。初回は10〜15%程度で、機構を浮かせて確認する。
+mechanism_speed_percent = 15.0
+mechanism_max_command = mechanism_speed_percent / 100.0
+
+# 位置PID。最初はKi=Kd=0で始め、必要な場合だけ少しずつ上げる。
+mechanism_pid_kp = 0.015
+mechanism_pid_ki = 0.000
+mechanism_pid_kd = 0.000
+mechanism_pid_integral_limit = 100.0
+mechanism_position_kp = mechanism_pid_kp  # 互換用の別名
 mechanism_command_accel_per_sec = 0.8
 mechanism_tolerance_deg = 1.0
 mechanism_encoder_direction = 1     # 目標角度と逆に動く場合は -1

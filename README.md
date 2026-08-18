@@ -129,7 +129,7 @@ python mecanum.py
 
 ## エンコーダー付き新機構をサーボのように扱う
 
-`EncoderServo` は単体モーターを角度指定で動かすためのAPIです。原点を設定してから、`move_to()` に目標角度を渡します。可動範囲・最高速度・原点から見た正方向は `hensuu.py` の `mechanism_*` で設定します。
+`EncoderServo` は単体モーターを角度指定で動かすPID付きAPIです。原点を設定してから、`move_to()` に目標角度を渡します。可動範囲・最高速度・PIDゲイン・原点から見た正方向は `hensuu.py` の `mechanism_*` で設定します。
 
 ```python
 from rox_mecanum import ATMotor, EncoderServo, ServoConfig
@@ -148,6 +148,19 @@ state = servo.update(raw_encoder_deg=87.3)
 if state.at_target:
     print("到達")
 ```
+
+ArduinoのServoライブラリに近い書き方もできます。`loop()` は必ず20〜100 Hz程度で繰り返し呼ぶ。
+
+```python
+servo.attach()
+servo.write(45)                   # move_to(45) と同じ
+state = servo.loop(raw_encoder_deg)  # update() と同じ
+print(servo.read())                # 最後に指定した目標角度
+print(servo.read_position())       # エンコーダーから得た実角度
+servo.detach()                     # 安全停止
+```
+
+まず `hensuu.py` の `mechanism_speed_percent` を10〜15程度にし、`mechanism_pid_ki` と `mechanism_pid_kd` は0のまま調整を始める。Kpを少しずつ上げ、振動や行き過ぎがあればKpを下げる。定常的に目標からずれる場合だけKiを微量に上げ、急停止時の行き過ぎが大きい場合だけKdを微量に上げる。
 
 現在のATシリアル用コードは速度指令だけを実装しているため、`raw_encoder_deg` のCAN受信処理は別途必要です。この部分はUSB-CANアダプターの種類が分かれば追加できます。
 

@@ -63,3 +63,30 @@ class EncoderServoTests(unittest.TestCase):
         state = servo.update(0, now=1.0)
         self.assertEqual(state.position_deg, 10)
         self.assertGreater(state.command, 0)
+
+    def test_pid_integral_term_accumulates_when_error_remains(self) -> None:
+        servo = EncoderServo(
+            self.motor,
+            ServoConfig(
+                max_command=0.8,
+                position_kp=0.01,
+                position_ki=0.02,
+                position_kd=0.0,
+                command_accel_per_sec=1000,
+            ),
+        )
+        servo.set_home(0)
+        servo.write(10)
+        first = servo.loop(0, now=1.0)
+        second = servo.loop(0, now=2.0)
+        self.assertGreater(second.i_term, first.i_term)
+        self.assertGreater(second.command, first.command)
+
+    def test_arduino_style_aliases(self) -> None:
+        self.servo.attach()
+        self.assertEqual(self.servo.write(30), 30)
+        self.assertEqual(self.servo.read(), 30)
+        self.servo.loop(100.0, now=1.0)
+        self.assertEqual(self.servo.read_position(), 0.0)
+        self.servo.detach()
+        self.assertEqual(self.motor.commands[-1], 0.0)
