@@ -127,6 +127,60 @@ python mecanum.py
 
 初回は `hensuu.py` の `mecanum_speed_percent = 30.0` のまま、タイヤが浮いた状態で回転方向を確認してください。
 
+## エンコーダー付き新機構をサーボのように扱う
+
+`EncoderServo` は単体モーターを角度指定で動かすためのAPIです。原点を設定してから、`move_to()` に目標角度を渡します。可動範囲・最高速度・原点から見た正方向は `hensuu.py` の `mechanism_*` で設定します。
+
+```python
+from rox_mecanum import ATMotor, EncoderServo, ServoConfig
+
+motor = ATMotor(transport, motor_id=0x05, speed_span=10000)
+servo = EncoderServo(
+    motor,
+    ServoConfig(min_position_deg=-30, max_position_deg=90, max_command=0.15),
+)
+servo.enable()
+servo.set_home(raw_encoder_deg=42.3)  # 物理原点に合わせた時のエンコーダー値
+servo.move_to(45)                     # 原点から45°へ移動
+
+# CAN受信部で得た角度を20〜100 Hzで渡す
+state = servo.update(raw_encoder_deg=87.3)
+if state.at_target:
+    print("到達")
+```
+
+現在のATシリアル用コードは速度指令だけを実装しているため、`raw_encoder_deg` のCAN受信処理は別途必要です。この部分はUSB-CANアダプターの種類が分かれば追加できます。
+
+### MKS CANable V2.0でエンコーダーを受信する
+
+MKS CANableをUbuntuへ接続し、CANH/CANLをモーターCANバスへ接続する。CANバスの終端抵抗は両端だけに120Ωを有効にする。CANableが `can0` として見える場合、EDULITE05の既定1 Mbpsで起動する。
+
+```bash
+sudo ip link set can0 down
+sudo ip link set can0 up type can bitrate 1000000
+python3 -m pip install -e '.[can]'
+```
+
+CANableが `can0` ではなく `/dev/ttyACM0` として見える場合は、先にslcanから `can0` を作る。
+
+```bash
+sudo slcand -o -c -s8 /dev/ttyACM0 can0
+sudo ip link set can0 up
+```
+
+CAN ID 5のエンコーダー値を受け、サーボへ渡す例:
+
+```python
+from rox_mecanum import CanEncoderReceiver
+
+receiver = CanEncoderReceiver.open_socketcan("can0")
+feedback = receiver.read(0x05)
+if feedback is not None:
+    state = servo.update(feedback.position_deg)
+```
+
+モーターは通常、指令への応答としてフィードバックを送信する。位置を保持する制御ループ中は継続して受信すること。
+
 ## 動作確認
 
 ```bash

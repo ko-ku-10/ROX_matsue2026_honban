@@ -12,6 +12,7 @@ from .controller import (
     ControllerState,
     PygameDualSense,
 )
+from .can_feedback import CanEncoderReceiver, MotorFeedback, decode_motor_feedback
 from .mecanum import (
     DualSenseMotionMapping,
     MecanumMixer,
@@ -36,6 +37,7 @@ from .serial_at import (
     build_velocity_frame,
     normalized_to_at_value,
 )
+from .servo import EncoderServo, ServoConfig, ServoState
 
 __all__ = [
     "AT_NEUTRAL_VALUE",
@@ -46,20 +48,26 @@ __all__ = [
     "AnalogStick",
     "Axis",
     "Button",
+    "CanEncoderReceiver",
     "ControllerProfile",
     "ControllerState",
     "DualSenseMotionMapping",
     "MecanumMixer",
     "MecanumRobot",
+    "MotorFeedback",
     "MotionCommand",
     "PySerialTransport",
     "PygameDualSense",
+    "EncoderServo",
+    "ServoConfig",
+    "ServoState",
     "WheelSpeeds",
     "build_enable_frame",
     "build_velocity_frame",
     "backward",
     "forward",
     "normalized_to_at_value",
+    "decode_motor_feedback",
     "stop",
     "strafe_left",
     "strafe_right",

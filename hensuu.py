@@ -41,3 +41,19 @@ mecanum_wheel_base_half_w = 0.10
 # 実機の配線・取付方向。通常は変更不要。
 mecanum_motor_ids = {"FL": 0x0C, "FR": 0x14, "RL": 0x1C, "RR": 0x24}
 mecanum_motor_directions = {"FL": 1.0, "FR": -1.0, "RL": 1.0, "RR": -1.0}
+
+
+# ============================================================
+# 新機構用サーボ（CAN ID 5）
+# ============================================================
+# 位置制御を使う前に、実機の可動範囲を必ず測定して設定する。
+mechanism_motor_id = 0x05
+mechanism_min_position_deg = -30.0
+mechanism_max_position_deg = 90.0
+mechanism_max_command = 0.15       # 初回は低速で確認する
+mechanism_position_kp = 0.015      # 角度誤差[deg]から速度を作る係数
+mechanism_command_accel_per_sec = 0.8
+mechanism_tolerance_deg = 1.0
+mechanism_encoder_direction = 1     # 目標角度と逆に動く場合は -1
+mechanism_can_channel = "can0"      # MKS CANableのSocketCAN名
+mechanism_can_id = 0x05
