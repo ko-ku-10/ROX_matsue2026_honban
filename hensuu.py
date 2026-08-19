@@ -44,24 +44,80 @@ mecanum_motor_directions = {"FL": 1.0, "FR": -1.0, "RL": 1.0, "RR": -1.0}
 
 
 # ============================================================
-# 新機構用サーボ（CAN ID 5）
+# 新機構用サーボ 1：catch（CAN ID 5）
 # ============================================================
-# 位置制御を使う前に、実機の可動範囲を必ず測定して設定する。
-mechanism_motor_id = 0x05
-mechanism_min_position_deg = -30.0
-mechanism_max_position_deg = 90.0
-# 速度上限。初回は10〜15%程度で、機構を浮かせて確認する。
-mechanism_speed_percent = 15.0
-mechanism_max_command = mechanism_speed_percent / 100.0
+# 原点はプログラム中で set_home() を呼んだ位置。可動範囲は原点からの角度で設定する。
+catch_motor_id = 0x05
+catch_can_id = catch_motor_id
+catch_min_position_deg = -30.0
+catch_max_position_deg = 90.0
 
-# 位置PID。最初はKi=Kd=0で始め、必要な場合だけ少しずつ上げる。
-mechanism_pid_kp = 0.015
-mechanism_pid_ki = 0.000
-mechanism_pid_kd = 0.000
-mechanism_pid_integral_limit = 100.0
-mechanism_position_kp = mechanism_pid_kp  # 互換用の別名
-mechanism_command_accel_per_sec = 0.8
-mechanism_tolerance_deg = 1.0
-mechanism_encoder_direction = 1     # 目標角度と逆に動く場合は -1
-mechanism_can_channel = "can0"      # MKS CANableのSocketCAN名
-mechanism_can_id = 0x05
+# 速度上限。初回は10〜15%程度で、機構を浮かせて確認する。
+catch_speed_percent = 15.0
+catch_max_command = catch_speed_percent / 100.0
+
+# 位置PID。最初は Ki=Kd=0 のまま Kp だけを少しずつ調整する。
+catch_pid_kp = 0.015
+catch_pid_ki = 0.000
+catch_pid_kd = 0.000
+catch_pid_integral_limit = 100.0
+catch_command_accel_per_sec = 0.8
+catch_tolerance_deg = 1.0
+catch_encoder_direction = 1     # 目標と逆に動く場合は -1
+
+
+# ============================================================
+# 新機構用サーボ 2：昇降など（CAN ID 6）
+# ============================================================
+# ID 5とは独立して、可動範囲・速度・PIDを設定できる。
+lift_motor_id = 0x06
+lift_can_id = lift_motor_id
+lift_min_position_deg = 0.0
+lift_max_position_deg = 200.0
+
+lift_speed_percent = 15.0
+lift_max_command = lift_speed_percent / 100.0
+
+lift_pid_kp = 0.015
+lift_pid_ki = 0.000
+lift_pid_kd = 0.000
+lift_pid_integral_limit = 100.0
+lift_command_accel_per_sec = 0.8
+lift_tolerance_deg = 1.0
+lift_encoder_direction = 1      # 目標と逆に動く場合は -1
+
+
+# MKS CANableのSocketCAN名。CAN ID 5/6の両方で共通に使う。
+mechanism_can_channel = "can0"
+
+# 以前の「mechanism_*」設定を使うプログラムとの互換用。
+# 既存の1軸プログラムでは、CAN ID 5（catch）の設定として動く。
+mechanism_motor_id = catch_motor_id
+mechanism_can_id = catch_can_id
+mechanism_min_position_deg = catch_min_position_deg
+mechanism_max_position_deg = catch_max_position_deg
+mechanism_speed_percent = catch_speed_percent
+mechanism_max_command = catch_max_command
+mechanism_pid_kp = catch_pid_kp
+mechanism_pid_ki = catch_pid_ki
+mechanism_pid_kd = catch_pid_kd
+mechanism_pid_integral_limit = catch_pid_integral_limit
+mechanism_position_kp = catch_pid_kp
+mechanism_command_accel_per_sec = catch_command_accel_per_sec
+mechanism_tolerance_deg = catch_tolerance_deg
+mechanism_encoder_direction = catch_encoder_direction
+
+# 名前を arm_* として書いている途中のプログラムとの互換用。
+arm_motor_id = catch_motor_id
+arm_can_id = catch_can_id
+arm_min_position_deg = catch_min_position_deg
+arm_max_position_deg = catch_max_position_deg
+arm_speed_percent = catch_speed_percent
+arm_max_command = catch_max_command
+arm_pid_kp = catch_pid_kp
+arm_pid_ki = catch_pid_ki
+arm_pid_kd = catch_pid_kd
+arm_pid_integral_limit = catch_pid_integral_limit
+arm_command_accel_per_sec = catch_command_accel_per_sec
+arm_tolerance_deg = catch_tolerance_deg
+arm_encoder_direction = catch_encoder_direction
