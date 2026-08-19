@@ -90,19 +90,3 @@ lift_encoder_direction = 1      # 目標と逆に動く場合は -1
 # MKS CANableのSocketCAN名。CAN ID 5/6の両方で共通に使う。
 mechanism_can_channel = "can0"
 
-# 以前の「mechanism_*」設定を使うプログラムとの互換用。
-# 既存の1軸プログラムでは、CAN ID 5（catch）の設定として動く。
-mechanism_motor_id = catch_motor_id
-mechanism_can_id = catch_can_id
-mechanism_min_position_deg = catch_min_position_deg
-mechanism_max_position_deg = catch_max_position_deg
-mechanism_speed_percent = catch_speed_percent
-mechanism_max_command = catch_max_command
-mechanism_pid_kp = catch_pid_kp
-mechanism_pid_ki = catch_pid_ki
-mechanism_pid_kd = catch_pid_kd
-mechanism_pid_integral_limit = catch_pid_integral_limit
-mechanism_position_kp = catch_pid_kp
-mechanism_command_accel_per_sec = catch_command_accel_per_sec
-mechanism_tolerance_deg = catch_tolerance_deg
-mechanism_encoder_direction = catch_encoder_direction
