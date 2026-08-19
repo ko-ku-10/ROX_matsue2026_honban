@@ -81,7 +81,7 @@ catch_enable_interval_sec = 0.05
 # 時間式サーボ用。catch_calibrate.py で90度に掛かった時間を測って設定する。
 # 0.0 のままでは catch_servo.py は安全のため動作しない。
 catch_calibration_speed_percent = 15.0
-catch_90deg_time_sec = 0.0
+catch_90deg_time_sec = 0.124
 catch_time_servo_direction = 1       # write(角度) が逆へ動いたら -1
 
 
