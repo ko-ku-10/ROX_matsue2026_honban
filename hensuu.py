@@ -5,7 +5,7 @@ serial_port = "/dev/ttyUSB0"
 serial_baud = 921600
 
 # メカナム
-mecanum_speed_percent = 30.0       # 最高速度（0〜100）
+mecanum_speed_percent = 100       # 最高速度（0〜100）
 mecanum_rotation_requires_r2 = True
 
 # catch: CAN ID 5、時間式サーボ
@@ -26,7 +26,7 @@ lift_min_angle = 0.0
 lift_max_angle = 90.0
 lift_calibration_speed_percent = 15.0
 lift_move_speed_percent = 7.5
-lift_90deg_time_sec = 0.0
+lift_90deg_time_sec = 0.124
 lift_direction = 1
 lift_brake_time_sec = 0.08
 
