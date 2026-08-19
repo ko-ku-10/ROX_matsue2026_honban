@@ -32,15 +32,18 @@ from .serial_at import (
     ATMotor,
     MecanumRobot,
     PySerialTransport,
+    at_address_from_can_id,
     build_enable_frame,
     build_velocity_frame,
     normalized_to_at_value,
 )
 from .timed_servo import TimedServo, TimedServoConfig
+from .feedback_servo import ATEncoderReader, EncoderPositionServo, PositionServoConfig
 
 __all__ = [
     "AT_NEUTRAL_VALUE",
     "ATMotor",
+    "at_address_from_can_id",
     "DEFAULT_MOTOR_DIRECTIONS",
     "DEFAULT_MOTOR_IDS",
     "DEFAULT_PYGAME_PROFILE",
@@ -57,6 +60,9 @@ __all__ = [
     "PygameDualSense",
     "TimedServo",
     "TimedServoConfig",
+    "ATEncoderReader",
+    "EncoderPositionServo",
+    "PositionServoConfig",
     "WheelSpeeds",
     "build_enable_frame",
     "build_velocity_frame",

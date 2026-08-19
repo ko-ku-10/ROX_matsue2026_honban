@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from time import monotonic, sleep
+from threading import Lock
 from typing import Mapping, Protocol
 
 from .mecanum import MecanumMixer, MotionCommand, WheelSpeeds
@@ -12,6 +13,17 @@ from .mecanum import MecanumMixer, MotionCommand, WheelSpeeds
 AT_NEUTRAL_VALUE = 0x7FFF
 DEFAULT_MOTOR_IDS: Mapping[str, int] = {"FL": 0x0C, "FR": 0x14, "RL": 0x1C, "RR": 0x24}
 DEFAULT_MOTOR_DIRECTIONS: Mapping[str, float] = {"FL": 1.0, "FR": -1.0, "RL": 1.0, "RR": -1.0}
+
+
+def at_address_from_can_id(can_id: int) -> int:
+    """CAN IDを、このATシリアル変換器用の宛先値へ変換する。
+
+    例: CAN ID 5 は ``0x2C``、CAN ID 6 は ``0x34`` になる。
+    """
+    can_id = int(can_id)
+    if not 0 <= can_id <= 31:
+        raise ValueError("can_id は 0〜31 の範囲にしてください")
+    return (can_id << 3) + 4
 
 
 class ByteTransport(Protocol):
@@ -62,6 +74,7 @@ class PySerialTransport:
         self._serial_port = serial_port
         self._minimum_interval = minimum_interval
         self._last_write_at = 0.0
+        self._write_lock = Lock()
 
     @classmethod
     def open(
@@ -79,14 +92,20 @@ class PySerialTransport:
         return cls(serial.Serial(port=port, baudrate=baudrate, timeout=timeout), minimum_interval)
 
     def write(self, data: bytes) -> None:
-        delay = self._minimum_interval - (monotonic() - self._last_write_at)
-        if delay > 0.0:
-            sleep(delay)
-        self._serial_port.write(data)
-        self._last_write_at = monotonic()
+        with self._write_lock:
+            delay = self._minimum_interval - (monotonic() - self._last_write_at)
+            if delay > 0.0:
+                sleep(delay)
+            self._serial_port.write(data)
+            self._last_write_at = monotonic()
 
     def close(self) -> None:
         self._serial_port.close()
+
+    def read_available(self) -> bytes:
+        """到着済みの受信データをすべて読む。エンコーダーフィードバック用。"""
+        waiting = int(getattr(self._serial_port, "in_waiting", 0))
+        return bytes(self._serial_port.read(waiting)) if waiting else b""
 
 
 @dataclass

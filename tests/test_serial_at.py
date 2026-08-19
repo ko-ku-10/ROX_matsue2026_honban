@@ -6,6 +6,7 @@ from rox_mecanum import (
     AT_NEUTRAL_VALUE,
     MecanumRobot,
     MotionCommand,
+    at_address_from_can_id,
     build_enable_frame,
     build_velocity_frame,
     normalized_to_at_value,
@@ -21,6 +22,10 @@ class FakeTransport:
 
 
 class SerialAtTests(unittest.TestCase):
+    def test_converts_can_id_to_at_address(self) -> None:
+        self.assertEqual(at_address_from_can_id(5), 0x2C)
+        self.assertEqual(at_address_from_can_id(6), 0x34)
+
     def test_at_velocity_frame_has_expected_neutral_value(self) -> None:
         frame = build_velocity_frame(0x0C, 0.0)
         self.assertEqual(len(frame), 17)

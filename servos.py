@@ -1,117 +1,154 @@
-"""catch（ID 5）とlift（ID 6）を時間式サーボとして扱う。"""
+"""hensuu.py の設定だけでcatch（ID 5）とlift（ID 6）を扱う高水準サーボAPI。"""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-import sys
 import time
+from dataclasses import dataclass
+from threading import Event, Lock, Thread, current_thread
 
 import hensuu
-from rox_mecanum import ATMotor, PySerialTransport, TimedServo, TimedServoConfig
+from rox_mecanum import (
+    ATEncoderReader,
+    ATMotor,
+    EncoderPositionServo,
+    PositionServoConfig,
+    PySerialTransport,
+    at_address_from_can_id,
+)
 
 
 @dataclass
 class ServoMotors:
-    """2台の時間式サーボと、共通のUSBシリアル接続。"""
+    """catch/liftの2台をまとめたもの。設定はすべてhensuu.pyから読む。"""
 
-    catch: TimedServo
-    lift: TimedServo
+    catch: EncoderPositionServo
+    lift: EncoderPositionServo
+    reader: ATEncoderReader
     transport: PySerialTransport
+    owns_transport: bool = True
+
+    def __post_init__(self) -> None:
+        self._lock = Lock()
+        self._stop_event = Event()
+        self._thread: Thread | None = None
 
     def attach(self) -> None:
-        # メカナムと同じく3回再送する。1回だけだと有効化を取りこぼすことがある。
-        self.catch.attach(retries=3, interval_sec=0.05)
-        self.lift.attach(retries=3, interval_sec=0.05)
+        """2台を有効化する。"""
+        self.catch.enable(retries=3)
+        self.lift.enable(retries=3)
 
-    def home(self, catch_angle: float = 0.0, lift_angle: float = 0.0) -> None:
-        """実機を各原点に合わせた直後に、両方の角度を登録する。"""
-        self.catch.home(catch_angle)
-        self.lift.home(lift_angle)
+    def home(self, catch_count: int, lift_count: int) -> None:
+        """指定した生エンコーダー値を両方の0°として登録する。"""
+        self.catch.set_home(catch_count)
+        self.lift.set_home(lift_count)
+
+    def home_from_feedback(self, timeout_sec: float = 5.0) -> None:
+        """最新フィードバックを待ち、現在位置を両方の0°として登録する。"""
+        deadline = time.monotonic() + timeout_sec
+        values: dict[str, int] = {}
+        while time.monotonic() < deadline and len(values) < 2:
+            self.reader.request_all()
+            time.sleep(0.02)
+            for feedback in self.reader.poll():
+                if feedback.name in {"catch", "lift"}:
+                    values[feedback.name] = feedback.count
+        if set(values) != {"catch", "lift"}:
+            raise TimeoutError("catch/liftのエンコーダー応答を受信できませんでした")
+        self.home(values["catch"], values["lift"])
+
+    def update(self) -> None:
+        """エンコーダーを要求・受信し、両方のPID保持を1回更新する。50Hzで呼ぶ。"""
+        with self._lock:
+            now = time.monotonic()
+            self.reader.request_all()
+            for feedback in self.reader.poll(now):
+                if feedback.name == "catch":
+                    self.catch.update(feedback.count, feedback.received_at)
+                elif feedback.name == "lift":
+                    self.lift.update(feedback.count, feedback.received_at)
+
+    def start_pid(self, hz: float | None = None) -> None:
+        """PID更新をバックグラウンドで開始する。以後 ``update()`` は不要。"""
+        if self._thread is not None and self._thread.is_alive():
+            return
+        frequency = float(hensuu.encoder_poll_hz if hz is None else hz)
+        if frequency <= 0.0:
+            raise ValueError("hz は0より大きくしてください")
+        self._stop_event.clear()
+        self._thread = Thread(target=self._pid_loop, args=(1.0 / frequency,), daemon=True, name="rox-servo-pid")
+        self._thread.start()
+
+    def stop_pid(self) -> None:
+        """バックグラウンドPID更新だけを止める。各モーターの保持状態は変えない。"""
+        self._stop_event.set()
+        if self._thread is not None and self._thread is not current_thread():
+            self._thread.join(timeout=1.0)
+        self._thread = None
+
+    def _pid_loop(self, interval: float) -> None:
+        while not self._stop_event.is_set():
+            started = time.monotonic()
+            self.update()
+            self._stop_event.wait(max(0.0, interval - (time.monotonic() - started)))
+
+    def release(self) -> None:
+        """2台ともPID保持を解除して停止する。"""
+        self.catch.release()
+        self.lift.release()
+
+    def pid_on(self, name: str) -> None:
+        """``'catch'`` または ``'lift'`` のPID保持をオンにする。"""
+        self._servo(name).pid_on()
+
+    def pid_off(self, name: str) -> None:
+        """``'catch'`` または ``'lift'`` のPID保持をオフにする。"""
+        self._servo(name).pid_off()
+
+    def _servo(self, name: str) -> EncoderPositionServo:
+        if name == "catch":
+            return self.catch
+        if name == "lift":
+            return self.lift
+        raise ValueError("name は 'catch' または 'lift' にしてください")
 
     def close(self) -> None:
-        self.catch.detach()
-        self.lift.detach()
-        self.transport.close()
+        self.stop_pid()
+        self.release()
+        if self.owns_transport:
+            self.transport.close()
 
 
-def _at_address(can_id: int) -> int:
-    """CAN IDを、メカナムと同じATシリアル用宛先へ変換する。"""
-    return (int(can_id) << 3) + 4
-
-
-def _config(
-    name: str,
-    min_angle: float,
-    max_angle: float,
-    calibration_speed_percent: float,
-    move_speed_percent: float,
-    time_90deg: float,
-    direction: int,
-    brake_time_sec: float,
-) -> TimedServoConfig:
-    if time_90deg <= 0.0:
-        raise RuntimeError(f"{name}_90deg_time_sec を90度の実測値（秒）に設定してください")
-    return TimedServoConfig(
-        min_angle=min_angle,
-        max_angle=max_angle,
-        degrees_per_second=90.0 / time_90deg,
-        calibration_speed=calibration_speed_percent / 100.0,
-        default_speed=move_speed_percent / 100.0,
-        direction=direction,
-        brake_time_sec=brake_time_sec,
+def _config(name: str) -> PositionServoConfig:
+    """hensuu.pyの ``catch_*`` / ``lift_*`` 設定からPID設定を作る。"""
+    return PositionServoConfig(
+        min_angle=getattr(hensuu, f"{name}_min_angle"),
+        max_angle=getattr(hensuu, f"{name}_max_angle"),
+        counts_per_degree=getattr(hensuu, f"{name}_counts_per_degree"),
+        kp=getattr(hensuu, f"{name}_pid_kp"),
+        ki=getattr(hensuu, f"{name}_pid_ki"),
+        kd=hensuu.servo_pid_kd,
+        integral_limit=hensuu.servo_pid_integral_limit,
+        max_speed=hensuu.servo_max_speed_percent / 100.0,
+        tolerance_deg=hensuu.servo_tolerance_deg,
+        direction=getattr(hensuu, f"{name}_direction"),
     )
 
 
-def open_servos() -> ServoMotors:
-    """catchとliftを開く。使用前に ``attach()`` と ``home()`` を呼ぶ。"""
-    transport = PySerialTransport.open(hensuu.serial_port, baudrate=hensuu.serial_baud, minimum_interval=0.0008)
-    try:
-        return ServoMotors(
-            catch=TimedServo(
-                ATMotor(transport, _at_address(hensuu.catch_can_id)),
-                _config(
-                    "catch", hensuu.catch_min_angle, hensuu.catch_max_angle,
-                    hensuu.catch_calibration_speed_percent, hensuu.catch_move_speed_percent,
-                    hensuu.catch_90deg_time_sec, hensuu.catch_direction, hensuu.catch_brake_time_sec,
-                ),
-            ),
-            lift=TimedServo(
-                ATMotor(transport, _at_address(hensuu.lift_can_id)),
-                _config(
-                    "lift", hensuu.lift_min_angle, hensuu.lift_max_angle,
-                    hensuu.lift_calibration_speed_percent, hensuu.lift_move_speed_percent,
-                    hensuu.lift_90deg_time_sec, hensuu.lift_direction, hensuu.lift_brake_time_sec,
-                ),
-            ),
-            transport=transport,
-        )
-    except Exception:
-        transport.close()
-        raise
+def open_servos(transport: PySerialTransport | None = None, reader: ATEncoderReader | None = None) -> ServoMotors:
+    """catch/liftを開く。
 
-
-def measure_lift_90() -> None:
-    """liftを90度動かす時間を、Enterキーで実測する。"""
-    transport = PySerialTransport.open(hensuu.serial_port, baudrate=hensuu.serial_baud, minimum_interval=0.0008)
-    motor = ATMotor(transport, _at_address(hensuu.lift_can_id))
-    try:
-        print("liftを安全な0度位置に手で合わせてください。")
-        input("準備できたら Enter。liftが回り始めます: ")
-        for _ in range(3):
-            motor.enable()
-            time.sleep(0.05)
-        started = time.monotonic()
-        motor.set_velocity(hensuu.lift_calibration_speed_percent / 100.0, force=True)
-        input("ちょうど90度になった瞬間に Enter: ")
-        elapsed = time.monotonic() - started
-        print(f"hensuu.py に設定: lift_90deg_time_sec = {elapsed:.3f}")
-    finally:
-        motor.stop()
-        transport.close()
-
-
-if __name__ == "__main__":
-    if len(sys.argv) == 2 and sys.argv[1] == "measure-lift":
-        measure_lift_90()
-    else:
-        print("ライブラリとして import して使います。liftの90度測定: python3 servos.py measure-lift")
+    通常は引数なしで使う。メカナムと同じ通信を共有する場合だけ、既存の
+    ``transport`` と、その通信を読む ``reader`` を渡す。
+    """
+    owns_transport = transport is None
+    transport = transport or PySerialTransport.open(hensuu.serial_port, hensuu.serial_baud, minimum_interval=0.0008)
+    catch_address = at_address_from_can_id(hensuu.catch_can_id)
+    lift_address = at_address_from_can_id(hensuu.lift_can_id)
+    reader = reader or ATEncoderReader(transport, {"catch": catch_address, "lift": lift_address})
+    return ServoMotors(
+        catch=EncoderPositionServo(ATMotor(transport, catch_address), _config("catch")),
+        lift=EncoderPositionServo(ATMotor(transport, lift_address), _config("lift")),
+        reader=reader,
+        transport=transport,
+        owns_transport=owns_transport,
+    )
