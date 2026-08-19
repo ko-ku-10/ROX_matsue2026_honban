@@ -106,18 +106,3 @@ mechanism_position_kp = catch_pid_kp
 mechanism_command_accel_per_sec = catch_command_accel_per_sec
 mechanism_tolerance_deg = catch_tolerance_deg
 mechanism_encoder_direction = catch_encoder_direction
-
-# 名前を arm_* として書いている途中のプログラムとの互換用。
-arm_motor_id = catch_motor_id
-arm_can_id = catch_can_id
-arm_min_position_deg = catch_min_position_deg
-arm_max_position_deg = catch_max_position_deg
-arm_speed_percent = catch_speed_percent
-arm_max_command = catch_max_command
-arm_pid_kp = catch_pid_kp
-arm_pid_ki = catch_pid_ki
-arm_pid_kd = catch_pid_kd
-arm_pid_integral_limit = catch_pid_integral_limit
-arm_command_accel_per_sec = catch_command_accel_per_sec
-arm_tolerance_deg = catch_tolerance_deg
-arm_encoder_direction = catch_encoder_direction
