@@ -22,6 +22,8 @@ class TimedServoConfig:
     degrees_per_second: float
     calibration_speed: float
     direction: int = 1
+    default_speed: float | None = None
+    brake_time_sec: float = 0.0
 
     def __post_init__(self) -> None:
         if self.max_angle <= self.min_angle:
@@ -32,6 +34,10 @@ class TimedServoConfig:
             raise ValueError("calibration_speed は 0 より大きく1以下にしてください")
         if self.direction not in (-1, 1):
             raise ValueError("direction は 1 または -1 にしてください")
+        if self.default_speed is not None and not 0.0 < abs(self.default_speed) <= 1.0:
+            raise ValueError("default_speed は 0以外の -1〜1 にしてください")
+        if self.brake_time_sec < 0.0:
+            raise ValueError("brake_time_sec は 0以上にしてください")
 
 
 class TimedServo:
@@ -80,16 +86,33 @@ class TimedServo:
         if delta == 0.0:
             return target
 
-        requested_speed = self.config.calibration_speed if speed is None else float(speed)
+        requested_speed = (
+            self.config.default_speed
+            if speed is None and self.config.default_speed is not None
+            else self.config.calibration_speed if speed is None else float(speed)
+        )
         if not 0.0 < abs(requested_speed) <= 1.0:
             raise ValueError("speed は 0以外の -1〜1 にしてください")
         duration = abs(delta) / self.config.degrees_per_second
         duration *= abs(self.config.calibration_speed) / abs(requested_speed)
         direction = 1.0 if delta > 0.0 else -1.0
 
+        # 減速区間は平均速度が半分になる。巡航時間を半分だけ短くして、
+        # 指定角度までの移動量が変わらないようにする。
+        brake_time = min(self.config.brake_time_sec, duration * 2.0)
+        cruise_time = duration - brake_time / 2.0
+
         try:
             self.motor.set_velocity(direction * self.config.direction * abs(requested_speed), force=True)
-            self._sleep(duration)
+            if cruise_time > 0.0:
+                self._sleep(cruise_time)
+            if brake_time > 0.0:
+                for factor in (0.75, 0.5, 0.25):
+                    self.motor.set_velocity(
+                        direction * self.config.direction * abs(requested_speed) * factor,
+                        force=True,
+                    )
+                    self._sleep(brake_time / 3.0)
             self._angle = target
             return target
         finally:

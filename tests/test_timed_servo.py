@@ -52,3 +52,15 @@ class TimedServoTests(unittest.TestCase):
         servo.home(0)
         servo.write(30)
         self.assertIn(("speed", -0.2, True), self.motor.commands)
+
+    def test_default_speed_and_soft_brake(self):
+        servo = TimedServo(
+            self.motor,
+            TimedServoConfig(0, 90, 30, 0.2, default_speed=0.1, brake_time_sec=1.0),
+            sleep=self.waits.append,
+        )
+        servo.home(0)
+        servo.write(30)
+        # 0.1で30度は2秒。最後の1秒を減速し、移動量は維持する。
+        self.assertEqual(self.waits, [1.5, 1 / 3, 1 / 3, 1 / 3])
+        self.assertAlmostEqual(self.motor.commands[3][1], 0.075)

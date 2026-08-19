@@ -16,8 +16,10 @@ def open_catch() -> tuple[TimedServo, PySerialTransport]:
             min_angle=hensuu.catch_min_angle,
             max_angle=hensuu.catch_max_angle,
             degrees_per_second=90.0 / hensuu.catch_90deg_time_sec,
-            calibration_speed=hensuu.catch_speed_percent / 100.0,
+            calibration_speed=hensuu.catch_calibration_speed_percent / 100.0,
             direction=hensuu.catch_direction,
+            default_speed=hensuu.catch_move_speed_percent / 100.0,
+            brake_time_sec=hensuu.catch_brake_time_sec,
         ),
     )
     return servo, transport
