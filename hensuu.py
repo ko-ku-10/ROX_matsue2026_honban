@@ -73,6 +73,8 @@ catch_forward_speed_percent = 15.0  # ○ボタン時の速度
 catch_reverse_speed_percent = 15.0  # ×ボタン時の速度
 catch_forward_time_sec = 0.50       # ○を1回押したときの回転時間
 catch_reverse_time_sec = 0.50       # ×を1回押したときの回転時間
+catch_enable_retries = 3            # 有効化フレームの送信回数
+catch_enable_interval_sec = 0.05
 
 
 # ============================================================
