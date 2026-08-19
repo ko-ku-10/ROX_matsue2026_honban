@@ -87,7 +87,10 @@ lift_tolerance_deg = 1.0
 lift_encoder_direction = 1      # 目標と逆に動く場合は -1
 
 
-# MKS CANableのSocketCAN名。CAN ID 5/6の両方で共通に使う。
-mechanism_can_channel = "can1"      # MKS CANableをslcandで作成したSocketCAN名
+# MKS CANable V2.0をPythonから直接使う設定。
+# slcand / can1 を作る必要はない。ttyUSB番号が変わったときだけここを書き換える。
+mechanism_can_interface = "slcan"
+mechanism_can_channel = "/dev/ttyUSB1"
+mechanism_can_bitrate = 1_000_000
 mechanism_host_id = 0xFF       # PC側のCANホストID。モーターIDより大きい0xFFを使う。
 

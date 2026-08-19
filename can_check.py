@@ -12,7 +12,11 @@ def main() -> None:
     host_id = hensuu.mechanism_host_id
     command = build_get_device_id_command(motor_id, host_id)
 
-    bus = can.Bus(interface="socketcan", channel=hensuu.mechanism_can_channel)
+    bus = can.Bus(
+        interface=getattr(hensuu, "mechanism_can_interface", "socketcan"),
+        channel=hensuu.mechanism_can_channel,
+        bitrate=getattr(hensuu, "mechanism_can_bitrate", 1_000_000),
+    )
     try:
         bus.send(can.Message(
             arbitration_id=command.arbitration_id,

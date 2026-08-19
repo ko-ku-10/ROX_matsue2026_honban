@@ -53,7 +53,11 @@ class ServoPair:
             raise RuntimeError("python-can が必要です: pip install 'rox-mecanum[can]'") from error
 
         try:
-            bus = can.Bus(interface="socketcan", channel=settings.mechanism_can_channel)
+            bus = can.Bus(
+                interface=getattr(settings, "mechanism_can_interface", "socketcan"),
+                channel=settings.mechanism_can_channel,
+                bitrate=getattr(settings, "mechanism_can_bitrate", 1_000_000),
+            )
         except Exception:
             raise
 
