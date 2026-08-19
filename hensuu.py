@@ -10,7 +10,7 @@ sore_time = 0.3 #ソレノイドのオンにする時間
 # ============================================================
 
 # モーターとのUSBシリアル接続
-mecanum_serial_port = "/dev/ttyUSB1"
+mecanum_serial_port = "/dev/ttyUSB0"
 mecanum_serial_baud = 921600
 
 # 最高速度。0〜100 の範囲で設定する（最初は低めの30がおすすめ）
