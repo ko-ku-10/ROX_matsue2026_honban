@@ -1,24 +1,33 @@
-from rox_mecanum import Button, PygameDualSense
-from gpiozero import LED
-import hensuu
+"""L2を押すとソレノイドを指定時間だけONにする。"""
+
 import time
 
-sore = LED(hensuu.sore_pin)
+import hensuu
+from gpiozero import LED
+from rox_mecanum import Button, PygameDualSense
 
 
+def main() -> None:
+    solenoid = LED(hensuu.solenoid_pin)
+    controller = PygameDualSense.open()
+    was_pressed = False
+    print("L2: ソレノイド  /  OPTIONS: 終了")
+    try:
+        while True:
+            state = controller.read()
+            if state.button(Button.OPTIONS):
+                break
+            pressed = state.button(Button.L2)
+            if pressed and not was_pressed:
+                solenoid.on()
+                time.sleep(hensuu.solenoid_time_sec)
+                solenoid.off()
+            was_pressed = pressed
+            time.sleep(0.02)
+    finally:
+        solenoid.off()
+        controller.close()
 
-Controller = PygameDualSense.open()
-try:
-    while True:
-        state = comtroller.read()
 
-        if state.button(Button.L2):
-            sore.on()
-            sleep(hensuu.sore_time)
-            sore.off()
-
-finally:
-    controller.close()
-
-
-
+if __name__ == "__main__":
+    main()

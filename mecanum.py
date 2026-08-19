@@ -35,7 +35,7 @@ def _speed_span(percent: float) -> int:
 
 def _control_interval(hz: float) -> float:
     if hz <= 0.0:
-        raise ValueError("hensuu.mecanum_control_hz は 0 より大きくしてください")
+        raise ValueError("制御周期は 0 より大きくしてください")
     return 1.0 / float(hz)
 
 
@@ -59,40 +59,39 @@ def main() -> None:
 
         controller = PygameDualSense.open()
         transport = PySerialTransport.open(
-            hensuu.mecanum_serial_port,
-            baudrate=hensuu.mecanum_serial_baud,
-            minimum_interval=hensuu.mecanum_serial_write_interval_sec,
+            hensuu.serial_port,
+            baudrate=hensuu.serial_baud,
+            minimum_interval=0.0008,
         )
         mixer = MecanumMixer(
             rotation_gain=(
-                float(hensuu.mecanum_wheel_base_half_l)
-                + float(hensuu.mecanum_wheel_base_half_w)
+                0.12 + 0.10
             )
         )
         robot = MecanumRobot(
             transport,
-            motor_ids=hensuu.mecanum_motor_ids,
-            motor_directions=hensuu.mecanum_motor_directions,
+            motor_ids={"FL": 0x0C, "FR": 0x14, "RL": 0x1C, "RR": 0x24},
+            motor_directions={"FL": 1.0, "FR": -1.0, "RL": 1.0, "RR": -1.0},
             mixer=mixer,
             speed_span=_speed_span(hensuu.mecanum_speed_percent),
         )
         mapping = DualSenseMotionMapping(
-            deadzone=float(hensuu.mecanum_deadzone),
+            deadzone=0.08,
             translation_enable=None,  # L2を移動条件にしない
             rotation_enable=Button.R2 if hensuu.mecanum_rotation_requires_r2 else None,
-            translation_gain=float(hensuu.mecanum_translation_gain),
-            rotation_gain=float(hensuu.mecanum_rotation_gain),
-            response_exponent=float(hensuu.mecanum_response_exponent),
+            translation_gain=1.0,
+            rotation_gain=1.0,
+            response_exponent=1.0,
         )
 
         robot.enable_all(
-            retries=int(hensuu.mecanum_enable_retries),
-            interval=float(hensuu.mecanum_enable_interval_sec),
+            retries=3,
+            interval=0.05,
         )
         print("モーターを有効化しました。操作を開始できます。")
 
-        interval = _control_interval(hensuu.mecanum_control_hz)
-        startup_stop_until = time.monotonic() + max(0.0, float(hensuu.mecanum_startup_stop_sec))
+        interval = _control_interval(20)
+        startup_stop_until = time.monotonic() + 0.8
         while True:
             loop_started = time.monotonic()
             state = controller.read()
