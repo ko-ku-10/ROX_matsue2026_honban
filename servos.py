@@ -19,8 +19,9 @@ class ServoMotors:
     transport: PySerialTransport
 
     def attach(self) -> None:
-        self.catch.attach()
-        self.lift.attach()
+        # メカナムと同じく3回再送する。1回だけだと有効化を取りこぼすことがある。
+        self.catch.attach(retries=3, interval_sec=0.05)
+        self.lift.attach(retries=3, interval_sec=0.05)
 
     def home(self, catch_angle: float = 0.0, lift_angle: float = 0.0) -> None:
         """実機を各原点に合わせた直後に、両方の角度を登録する。"""
@@ -96,7 +97,9 @@ def measure_lift_90() -> None:
     try:
         print("liftを安全な0度位置に手で合わせてください。")
         input("準備できたら Enter。liftが回り始めます: ")
-        motor.enable()
+        for _ in range(3):
+            motor.enable()
+            time.sleep(0.05)
         started = time.monotonic()
         motor.set_velocity(hensuu.lift_calibration_speed_percent / 100.0, force=True)
         input("ちょうど90度になった瞬間に Enter: ")

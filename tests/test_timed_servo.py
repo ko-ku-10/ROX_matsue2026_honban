@@ -31,6 +31,11 @@ class TimedServoTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             self.servo.write(30)
 
+    def test_attach_can_retry(self):
+        self.servo.attach(retries=3, interval_sec=0.1)
+        self.assertEqual(self.motor.commands, [("enable",), ("enable",), ("enable",)])
+        self.assertEqual(self.waits, [0.1, 0.1])
+
     def test_write_moves_for_calibrated_duration(self):
         self.servo.home(0)
         self.assertEqual(self.servo.write(90), 90)

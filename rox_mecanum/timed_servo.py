@@ -56,9 +56,14 @@ class TimedServo:
         self._angle: float | None = None
         self._attached = False
 
-    def attach(self) -> None:
-        """モーターを有効化する。"""
-        self.motor.enable()
+    def attach(self, retries: int = 1, interval_sec: float = 0.0) -> None:
+        """モーターを有効化する。通信を安定させるため再送できる。"""
+        if retries < 1:
+            raise ValueError("retries は1以上にしてください")
+        for attempt in range(retries):
+            self.motor.enable()
+            if attempt + 1 < retries and interval_sec > 0.0:
+                self._sleep(interval_sec)
         self._attached = True
 
     def home(self, angle: float = 0.0) -> None:
