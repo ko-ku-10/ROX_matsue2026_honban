@@ -65,6 +65,15 @@ catch_command_accel_per_sec = 0.8
 catch_tolerance_deg = 1.0
 catch_encoder_direction = 1     # 目標と逆に動く場合は -1
 
+# エンコーダーを使わない時間制御用（ATシリアル方式）。
+# メカナムと別のUSBシリアル変換器を使う場合だけ、ここを別ポートにする。
+catch_serial_port = mecanum_serial_port
+catch_serial_baud = mecanum_serial_baud
+catch_forward_speed_percent = 15.0  # ○ボタン時の速度
+catch_reverse_speed_percent = 15.0  # ×ボタン時の速度
+catch_forward_time_sec = 0.50       # ○を1回押したときの回転時間
+catch_reverse_time_sec = 0.50       # ×を1回押したときの回転時間
+
 
 # ============================================================
 # 新機構用サーボ 2：昇降など（CAN ID 6）
