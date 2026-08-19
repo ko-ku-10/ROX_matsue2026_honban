@@ -41,6 +41,7 @@ from .serial_at import (
 )
 from .servo import EncoderServo, ServoConfig, ServoState
 from .servo_pair import ServoPair
+from .timed_servo import TimedServo, TimedServoConfig
 
 __all__ = [
     "AT_NEUTRAL_VALUE",
@@ -67,6 +68,8 @@ __all__ = [
     "ServoConfig",
     "ServoState",
     "ServoPair",
+    "TimedServo",
+    "TimedServoConfig",
     "WheelSpeeds",
     "build_enable_frame",
     "build_velocity_frame",

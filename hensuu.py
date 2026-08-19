@@ -78,6 +78,12 @@ catch_reverse_time_sec = 0.50       # ×を1回押したときの回転時間
 catch_enable_retries = 3            # 有効化フレームの送信回数
 catch_enable_interval_sec = 0.05
 
+# 時間式サーボ用。catch_calibrate.py で90度に掛かった時間を測って設定する。
+# 0.0 のままでは catch_servo.py は安全のため動作しない。
+catch_calibration_speed_percent = 15.0
+catch_90deg_time_sec = 0.0
+catch_time_servo_direction = 1       # write(角度) が逆へ動いたら -1
+
 
 # ============================================================
 # 新機構用サーボ 2：昇降など（CAN ID 6）
