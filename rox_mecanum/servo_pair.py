@@ -7,7 +7,7 @@ from types import ModuleType
 from typing import Any
 
 from .can_feedback import CanBus, decode_motor_feedback
-from .serial_at import ATMotor, PySerialTransport
+from .can_motor import RobStrideCanMotor
 from .servo import EncoderServo, ServoConfig, ServoState
 
 
@@ -35,7 +35,6 @@ class ServoPair:
         *,
         catch_id: int,
         lift_id: int,
-        transport: PySerialTransport | None = None,
     ) -> None:
         if catch_id == lift_id:
             raise ValueError("catch_id and lift_id must be different")
@@ -44,37 +43,29 @@ class ServoPair:
         self._bus = bus
         self._catch_id = int(catch_id)
         self._lift_id = int(lift_id)
-        self._transport = transport
 
     @classmethod
     def open_from_hensuu(cls, settings: ModuleType | Any) -> "ServoPair":
-        """hensuu.pyの設定だけで、ID 5/6用の接続とPIDサーボを作る。"""
-        transport = PySerialTransport.open(
-            settings.mecanum_serial_port,
-            baudrate=settings.mecanum_serial_baud,
-            minimum_interval=settings.mecanum_serial_write_interval_sec,
-        )
+        """hensuu.pyの設定だけで、CANable直結のID 5/6 PIDサーボを作る。"""
         try:
             import can
         except ImportError as error:  # pragma: no cover - 実機依存
-            transport.close()
             raise RuntimeError("python-can が必要です: pip install 'rox-mecanum[can]'") from error
 
         try:
             bus = can.Bus(interface="socketcan", channel=settings.mechanism_can_channel)
         except Exception:
-            transport.close()
             raise
 
-        catch_motor = ATMotor(transport, settings.catch_motor_id)
-        lift_motor = ATMotor(transport, settings.lift_motor_id)
+        host_id = getattr(settings, "mechanism_host_id", 0)
+        catch_motor = RobStrideCanMotor(bus, settings.catch_motor_id, host_id=host_id)
+        lift_motor = RobStrideCanMotor(bus, settings.lift_motor_id, host_id=host_id)
         return cls(
             EncoderServo(catch_motor, _servo_config(settings, "catch")),
             EncoderServo(lift_motor, _servo_config(settings, "lift")),
             bus,
             catch_id=settings.catch_motor_id,
             lift_id=settings.lift_motor_id,
-            transport=transport,
         )
 
     @property
@@ -114,11 +105,13 @@ class ServoPair:
         self.lift.stop()
 
     def close(self) -> None:
-        """停止してからCANとシリアル接続を閉じる。"""
+        """停止・無効化してからCAN接続を閉じる。"""
         self.stop()
+        if isinstance(self.catch.motor, RobStrideCanMotor):
+            self.catch.motor.disable()
+        if isinstance(self.lift.motor, RobStrideCanMotor):
+            self.lift.motor.disable()
         self._bus.shutdown()
-        if self._transport is not None:
-            self._transport.close()
 
     @staticmethod
     def _update_axis(servo: EncoderServo, raw_encoder_deg: float) -> ServoState | None:

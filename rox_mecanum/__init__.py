@@ -13,6 +13,7 @@ from .controller import (
     PygameDualSense,
 )
 from .can_feedback import CanEncoderReceiver, MotorFeedback, decode_motor_feedback
+from .can_motor import RobStrideCanMotor
 from .mecanum import (
     DualSenseMotionMapping,
     MecanumMixer,
@@ -50,6 +51,7 @@ __all__ = [
     "Axis",
     "Button",
     "CanEncoderReceiver",
+    "RobStrideCanMotor",
     "ControllerProfile",
     "ControllerState",
     "DualSenseMotionMapping",
