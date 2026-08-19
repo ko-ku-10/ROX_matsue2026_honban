@@ -14,6 +14,9 @@ KP_MIN = 0.0
 KP_MAX = 500.0
 KD_MIN = 0.0
 KD_MAX = 5.0
+TORQUE_MIN_NM = -6.0
+TORQUE_MAX_NM = 6.0
+DEFAULT_HOST_ID = 0xFF
 
 
 class CanSender(Protocol):
@@ -29,23 +32,29 @@ class CanCommand:
     is_extended_id: bool = True
 
 
-def build_private_arbitration_id(communication_type: int, motor_id: int, host_id: int = 0) -> int:
+def build_private_arbitration_id(communication_type: int, extra_data: int, motor_id: int) -> int:
     """RobStride私有プロトコルの29ビット拡張CAN IDを作る。"""
     if not 0 <= int(communication_type) <= 0x1F:
         raise ValueError("communication_type must be 0..31")
+    if not 0 <= int(extra_data) <= 0xFFFF:
+        raise ValueError("extra_data must be an unsigned 16-bit value")
     _byte(motor_id, "motor_id")
-    _byte(host_id, "host_id")
-    return (int(communication_type) << 24) | (int(host_id) << 8) | int(motor_id)
+    return (int(communication_type) << 24) | (int(extra_data) << 8) | int(motor_id)
 
 
-def build_enable_command(motor_id: int, host_id: int = 0) -> CanCommand:
+def build_enable_command(motor_id: int, host_id: int = DEFAULT_HOST_ID) -> CanCommand:
     """通信タイプ3：モーターを有効化する。"""
-    return _command(3, motor_id, host_id, bytes(8))
+    return _command(3, host_id, motor_id, bytes(8))
 
 
-def build_disable_command(motor_id: int, host_id: int = 0) -> CanCommand:
+def build_get_device_id_command(motor_id: int, host_id: int = DEFAULT_HOST_ID) -> CanCommand:
+    """通信タイプ0：モーターを動かさず、CAN IDと固有IDを問い合わせる。"""
+    return _command(0, host_id, motor_id, bytes(8))
+
+
+def build_disable_command(motor_id: int, host_id: int = DEFAULT_HOST_ID) -> CanCommand:
     """通信タイプ4：モーターを停止・無効化する。"""
-    return _command(4, motor_id, host_id, bytes(8))
+    return _command(4, host_id, motor_id, bytes(8))
 
 
 def build_operation_control_command(
@@ -55,9 +64,12 @@ def build_operation_control_command(
     velocity_rad_per_sec: float = 0.0,
     kp: float = 0.0,
     kd: float = 0.0,
-    host_id: int = 0,
+    torque_nm: float = 0.0,
 ) -> CanCommand:
-    """通信タイプ1：運転制御フレームを作る（位置・速度・Kp・Kd）。"""
+    """通信タイプ1：運転制御フレームを作る。
+
+    タイプ1のCAN ID中央16ビットはホストIDではなく、トルク指令である。
+    """
     data = b"".join(
         _float_to_uint16(value, minimum, maximum).to_bytes(2, "big")
         for value, minimum, maximum in (
@@ -67,12 +79,13 @@ def build_operation_control_command(
             (kd, KD_MIN, KD_MAX),
         )
     )
-    return _command(1, motor_id, host_id, data)
+    torque_raw = _float_to_uint16(torque_nm, TORQUE_MIN_NM, TORQUE_MAX_NM)
+    return _command(1, torque_raw, motor_id, data)
 
 
-def build_active_report_command(motor_id: int, enabled: bool, host_id: int = 0) -> CanCommand:
+def build_active_report_command(motor_id: int, enabled: bool, host_id: int = DEFAULT_HOST_ID) -> CanCommand:
     """通信タイプ24：10ms周期のエンコーダー能動送信をオン／オフする。"""
-    return _command(24, motor_id, host_id, bytes((1 if enabled else 0, 0, 0, 0, 0, 0, 0, 0)))
+    return _command(24, host_id, motor_id, bytes((1 if enabled else 0, 0, 0, 0, 0, 0, 0, 0)))
 
 
 class RobStrideCanMotor:
@@ -82,7 +95,7 @@ class RobStrideCanMotor:
     このクラスはタイプ1の速度フィールドへCAN送信する。
     """
 
-    def __init__(self, bus: CanSender, motor_id: int, *, host_id: int = 0) -> None:
+    def __init__(self, bus: CanSender, motor_id: int, *, host_id: int = DEFAULT_HOST_ID) -> None:
         self._bus = bus
         self.motor_id = _byte(motor_id, "motor_id")
         self.host_id = _byte(host_id, "host_id")
@@ -106,7 +119,6 @@ class RobStrideCanMotor:
         self._send(build_operation_control_command(
             self.motor_id,
             velocity_rad_per_sec=speed * VELOCITY_MAX_RAD_PER_SEC,
-            host_id=self.host_id,
         ))
         self._last_speed = speed
 
@@ -126,15 +138,16 @@ class RobStrideCanMotor:
         ))
 
 
-def _command(communication_type: int, motor_id: int, host_id: int, data: bytes) -> CanCommand:
+def _command(communication_type: int, extra_data: int, motor_id: int, data: bytes) -> CanCommand:
     if len(data) != 8:
         raise ValueError("RobStride CAN command data must be 8 bytes")
-    return CanCommand(build_private_arbitration_id(communication_type, motor_id, host_id), data)
+    return CanCommand(build_private_arbitration_id(communication_type, extra_data, motor_id), data)
 
 
 def _float_to_uint16(value: float, minimum: float, maximum: float) -> int:
     clipped = max(minimum, min(maximum, float(value)))
-    return round((clipped - minimum) * 65535.0 / (maximum - minimum))
+    # RobStride公式SDKと同じ切り捨て。ゼロは中立値 0x7FFF になる。
+    return int((clipped - minimum) * 65535.0 / (maximum - minimum))
 
 
 def _byte(value: int, name: str) -> int:

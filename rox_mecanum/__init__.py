@@ -14,6 +14,7 @@ from .controller import (
 )
 from .can_feedback import CanEncoderReceiver, MotorFeedback, decode_motor_feedback
 from .can_motor import RobStrideCanMotor
+from .can_motor import build_get_device_id_command
 from .mecanum import (
     DualSenseMotionMapping,
     MecanumMixer,
@@ -52,6 +53,7 @@ __all__ = [
     "Button",
     "CanEncoderReceiver",
     "RobStrideCanMotor",
+    "build_get_device_id_command",
     "ControllerProfile",
     "ControllerState",
     "DualSenseMotionMapping",

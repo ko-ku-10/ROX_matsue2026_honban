@@ -88,6 +88,6 @@ lift_encoder_direction = 1      # 目標と逆に動く場合は -1
 
 
 # MKS CANableのSocketCAN名。CAN ID 5/6の両方で共通に使う。
-mechanism_can_channel = "can0"
-mechanism_host_id = 0          # PC側のCANホストID。通常は0のまま。
+mechanism_can_channel = "can1"      # MKS CANableをslcandで作成したSocketCAN名
+mechanism_host_id = 0xFF       # PC側のCANホストID。モーターIDより大きい0xFFを使う。
 

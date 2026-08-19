@@ -7,7 +7,7 @@ from types import ModuleType
 from typing import Any
 
 from .can_feedback import CanBus, decode_motor_feedback
-from .can_motor import RobStrideCanMotor
+from .can_motor import DEFAULT_HOST_ID, RobStrideCanMotor
 from .servo import EncoderServo, ServoConfig, ServoState
 
 
@@ -57,7 +57,7 @@ class ServoPair:
         except Exception:
             raise
 
-        host_id = getattr(settings, "mechanism_host_id", 0)
+        host_id = getattr(settings, "mechanism_host_id", DEFAULT_HOST_ID)
         catch_motor = RobStrideCanMotor(bus, settings.catch_motor_id, host_id=host_id)
         lift_motor = RobStrideCanMotor(bus, settings.lift_motor_id, host_id=host_id)
         return cls(
