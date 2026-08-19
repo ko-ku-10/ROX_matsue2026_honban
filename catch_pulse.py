@@ -24,7 +24,11 @@ def main() -> None:
     motor = ATMotor(transport, hensuu.catch_motor_id)
 
     try:
-        print(f"CAN ID {hensuu.catch_motor_id}: {speed * 100:+.0f}% を {duration:.2f}秒だけ送信します")
+        print(
+            f"CAN ID {hensuu.catch_can_id} "
+            f"(AT宛先 0x{hensuu.catch_motor_id:02X}): "
+            f"{speed * 100:+.0f}% を {duration:.2f}秒だけ送信します"
+        )
         for _ in range(hensuu.catch_enable_retries):
             motor.enable()
             time.sleep(hensuu.catch_enable_interval_sec)

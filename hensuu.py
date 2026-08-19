@@ -47,8 +47,10 @@ mecanum_motor_directions = {"FL": 1.0, "FR": -1.0, "RL": 1.0, "RR": -1.0}
 # 新機構用サーボ 1：catch（CAN ID 5）
 # ============================================================
 # 原点はプログラム中で set_home() を呼んだ位置。可動範囲は原点からの角度で設定する。
-catch_motor_id = 0x05
-catch_can_id = catch_motor_id
+# ATシリアルの宛先値は CAN ID そのものではない。
+# メカナムと同じ変換: ``(CAN ID << 3) + 4`` を使う。
+catch_can_id = 0x05
+catch_motor_id = (catch_can_id << 3) + 4  # CAN ID 5 -> 0x2C
 catch_min_position_deg = -30.0
 catch_max_position_deg = 90.0
 
@@ -81,8 +83,8 @@ catch_enable_interval_sec = 0.05
 # 新機構用サーボ 2：昇降など（CAN ID 6）
 # ============================================================
 # ID 5とは独立して、可動範囲・速度・PIDを設定できる。
-lift_motor_id = 0x06
-lift_can_id = lift_motor_id
+lift_can_id = 0x06
+lift_motor_id = (lift_can_id << 3) + 4    # CAN ID 6 -> 0x34
 lift_min_position_deg = 0.0
 lift_max_position_deg = 200.0
 
