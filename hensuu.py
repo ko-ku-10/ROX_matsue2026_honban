@@ -35,14 +35,14 @@ lift_brake_time_sec = 0.08
 catch_counts_per_degree = 65536.0 / 360.0
 lift_counts_per_degree = 65536.0 / 360.0
 catch_pid_kp = 0.015
-lift_pid_kp = 0.015
+lift_pid_kp = 0.003
 # 重力などで同じ方向へずれ続ける場合に、少しずつ保持力を増やす。
 catch_pid_ki = 0.002
-lift_pid_ki = 0.002
+lift_pid_ki = 0.000
 servo_pid_kd = 0.000
 servo_pid_integral_limit = 30.0
 servo_max_speed_percent = 20.0
-servo_tolerance_deg = 0.1
+servo_tolerance_deg = 1.0
 encoder_poll_hz = 50.0
 
 # 状態表示サイト: http://ロボットのIPアドレス:8000
