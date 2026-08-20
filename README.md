@@ -264,6 +264,14 @@ python3 angle_monitor.py
 python3 at_mechpos_probe.py
 ```
 
+AT変換器が返す16bit位置値の対応を測る場合は、こちらを使います。モーターを動かす命令は送りません。
+
+```bash
+python3 at_angle_calibrate.py
+```
+
+表示を記録してから機構を正確に90°動かし、`delta`の増減を確認します。ここで得る仮角度は検証用であり、変換式が確定するまでPIDには使いません。
+
 サーボは原点を読んだだけでは動きません。`write(角度)`、`hold_current()`、または`pid_on()`を明示的に呼んだ場合だけ位置補正を開始します。
 
 ## PIDを実機で調整する
