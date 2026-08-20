@@ -293,6 +293,16 @@ python3 lift_check.py
 
 左スティック上・下でliftを正逆転し、エンコーダー生値を表示します。この確認で両方向へ回ることを確かめてからPID調整へ進みます。
 
+catchも同時に確認する場合はこちらです。
+
+```bash
+python3 servo_check.py
+```
+
+- 左スティック上下: lift
+- 右スティック上下: catch
+- OPTIONS: 両方を停止して終了
+
 ## 安全上の注意
 
 - PIDの初回確認は必ず機構を浮かせ、`servo_max_speed_percent` を低くして行います。
