@@ -26,12 +26,14 @@ reader = ATEncoderReader(transport, {"catch": catch_address, "lift": lift_addres
 controller = PygameDualSense.open()
 
 try:
+    catch.stop()  # 有効化前に前回の速度指令を消す。
+    lift.stop()
     for _ in range(3):
         catch.enable()
         lift.enable()
+        catch.stop()  # 有効化直後の急発進を防ぐ。
+        lift.stop()
         time.sleep(0.05)
-    catch.stop()
-    lift.stop()
 
     print("サーボ単体確認（PIDなし）")
     print("左スティック上下=lift / 右スティック上下=catch / OPTIONS=停止終了")

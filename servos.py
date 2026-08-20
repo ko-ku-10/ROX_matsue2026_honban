@@ -33,9 +33,12 @@ class ServoMotors:
         self._thread: Thread | None = None
 
     def attach(self) -> None:
-        """2台を有効化する。"""
-        self.catch.enable(retries=3)
-        self.lift.enable(retries=3)
+        """2台を停止状態で有効化する。前回の速度指令による急発進を防ぐ。"""
+        for servo in (self.catch, self.lift):
+            servo.motor.stop()  # 有効化前に古い速度指令を上書きする。
+        for servo in (self.catch, self.lift):
+            servo.enable(retries=3)
+            servo.motor.stop()  # 有効化直後にも必ず停止を送る。
 
     def home(self, catch_count: int, lift_count: int) -> None:
         """指定した生エンコーダー値を両方の0°として登録する。"""

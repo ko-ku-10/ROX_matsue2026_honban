@@ -20,10 +20,11 @@ reader = ATEncoderReader(transport, {"lift": address})
 controller = PygameDualSense.open()
 
 try:
+    lift.stop()  # 有効化前に前回の速度指令を消す。
     for _ in range(3):
         lift.enable()
+        lift.stop()  # 有効化直後の急発進を防ぐ。
         time.sleep(0.05)
-    lift.stop()
 
     print("lift単体確認: 左スティック上=正方向、下=逆方向、OPTIONS=停止終了")
     print("エンコーダーのcountも表示します。PIDは一切動きません。")
