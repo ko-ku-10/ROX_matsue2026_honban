@@ -48,12 +48,14 @@ class FeedbackServoTests(unittest.TestCase):
         self.assertEqual(feedback[0].count, 0x1234)
 
     def test_reader_decodes_official_mech_pos_as_radians(self):
-        # 正式なタイプ17応答: byte0-1=0x7019、byte4-7=float mechPos[rad]。
+        # 実測したAT type17応答: byte0-1=0x7019、byte4-7=float mechPos[rad]。
         data = bytes((0x19, 0x70, 0, 0)) + pack("<f", 1.5)
-        packet = b"AT" + bytes((0x10, 0x00, 0x2F, 0x2C, 0x08)) + data + b"\r\n"
+        # 0x11000500 をAT形式へ変換: (CAN ID << 3) | 0b100 = 0x88002804。
+        packet = b"AT" + bytes((0x88, 0x00, 0x28, 0x04, 0x08)) + data + b"\r\n"
         reader = ATEncoderReader(FakeTransport(packet), {"catch": 0x2C})
         feedback = reader.poll(now=1.0)[0]
         self.assertAlmostEqual(feedback.position_rad, 1.5)
+        self.assertIsNone(feedback.count)
 
     def test_position_servo_corrects_external_displacement(self):
         motor = FakeMotor()

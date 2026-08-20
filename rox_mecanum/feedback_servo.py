@@ -65,16 +65,37 @@ class ATEncoderReader:
         self._buffer.extend(self.transport.read_available())
         timestamp = monotonic() if now is None else now
         values: list[EncoderFeedback] = []
-        for _, can_id, address, data in _take_at_frames(self._buffer):
-            name = self._by_status_id.get(can_id) or self._by_status_id.get(can_id & 0xFF) or self._by_address.get(address)
+        for at_identifier, data in _take_at_frames(self._buffer):
+            # ATの拡張フレームは ``(29bit CAN ID << 3) | 0b100`` で格納される。
+            ext_can_id = at_identifier >> 3
+            mode = (ext_can_id >> 24) & 0x1F
+            position_rad = _decode_mech_pos(data)
+
+            if mode == 0x11 and position_rad is not None:
+                # type17応答。実測したAT応答ではdata16の下位8bitがmotor CAN ID。
+                data16 = (ext_can_id >> 8) & 0xFFFF
+                candidate_ids = (data16 & 0xFF, data16 >> 8)
+                name = next(
+                    (self._by_address.get((motor_id << 3) + 4) for motor_id in candidate_ids
+                     if self._by_address.get((motor_id << 3) + 4) is not None),
+                    None,
+                )
+                count = None
+            else:
+                # 旧ATステータス形式も読み取り専用の表示用途として残す。
+                can_id = (at_identifier >> 8) & 0xFFFF
+                address = at_identifier & 0xFF
+                name = self._by_status_id.get(can_id) or self._by_status_id.get(can_id & 0xFF) or self._by_address.get(address)
+                count = int.from_bytes(data[:2], "little") if len(data) >= 2 else None
+
             if name is not None and len(data) >= 2:
                 values.append(
                     EncoderFeedback(
                         name,
                         self.addresses[name],
-                        int.from_bytes(data[:2], "little"),
+                        count,
                         timestamp,
-                        _decode_mech_pos(data),
+                        position_rad,
                     )
                 )
         return values
@@ -337,7 +358,7 @@ def _can_id_from_at_address(address: int) -> int:
     return (address - 4) // 8
 
 
-def _take_at_frames(buffer: bytearray) -> list[tuple[int, int, int, bytes]]:
+def _take_at_frames(buffer: bytearray) -> list[tuple[int, bytes]]:
     frames = []
     while True:
         start = buffer.find(b"AT")
@@ -355,6 +376,7 @@ def _take_at_frames(buffer: bytearray) -> list[tuple[int, int, int, bytes]]:
         if buffer[total - 2:total] != b"\r\n":
             del buffer[0]
             continue
-        frames.append((buffer[2], (buffer[3] << 8) | buffer[4], buffer[5], bytes(buffer[7:7 + data_length])))
+        at_identifier = int.from_bytes(buffer[2:6], "big")
+        frames.append((at_identifier, bytes(buffer[7:7 + data_length])))
         del buffer[:total]
     return frames
