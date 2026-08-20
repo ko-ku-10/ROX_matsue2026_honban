@@ -285,6 +285,14 @@ python3 lift_pid_tuner.py
 - ×: liftのPIDを解除
 - OPTIONS: 非常停止して終了
 
+PIDが期待通りに動かない場合は、先にPIDを使わない単体確認をします。
+
+```bash
+python3 lift_check.py
+```
+
+左スティック上・下でliftを正逆転し、エンコーダー生値を表示します。この確認で両方向へ回ることを確かめてからPID調整へ進みます。
+
 ## 安全上の注意
 
 - PIDの初回確認は必ず機構を浮かせ、`servo_max_speed_percent` を低くして行います。
