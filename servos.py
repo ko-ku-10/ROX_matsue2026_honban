@@ -71,7 +71,9 @@ class ServoMotors:
                 self.reader.request(name)
                 time.sleep(0.05)
                 for feedback in self.reader.poll():
-                    if feedback.name in {"catch", "lift"}:
+                    # attach()直後には有効化・停止に対する旧ステータス応答も来る。
+                    # 原点には正式なmechPos(0x7019 float)だけを絶対に採用する。
+                    if feedback.name in {"catch", "lift"} and feedback.position_rad is not None:
                         values[feedback.name] = feedback
         if set(values) != {"catch", "lift"}:
             raise TimeoutError("catch/liftのエンコーダー応答を受信できませんでした")
