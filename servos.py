@@ -206,8 +206,10 @@ def open_servos(transport: PySerialTransport | None = None, reader: ATEncoderRea
     lift_address = at_address_from_can_id(hensuu.lift_can_id)
     reader = reader or ATEncoderReader(transport, {"catch": catch_address, "lift": lift_address})
     return ServoMotors(
-        catch=EncoderPositionServo(ATMotor(transport, catch_address), _config("catch")),
-        lift=EncoderPositionServo(ATMotor(transport, lift_address), _config("lift")),
+        # PIDは小さい補正速度も必要。通常の手動モーター用の6%停止帯を
+        # ここで使うと、最大5%の安全なPID出力がすべて0になってしまう。
+        catch=EncoderPositionServo(ATMotor(transport, catch_address, zero_hold_band=0.0), _config("catch")),
+        lift=EncoderPositionServo(ATMotor(transport, lift_address, zero_hold_band=0.0), _config("lift")),
         reader=reader,
         transport=transport,
         owns_transport=owns_transport,
