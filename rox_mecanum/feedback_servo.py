@@ -56,10 +56,32 @@ class ATEncoderReader:
         self._by_address = {address: name for name, address in self.addresses.items()}
         self._by_status_id = {address + 3: name for name, address in self.addresses.items()}
         self._buffer = bytearray()
+        self._cycle_addresses = tuple(self.addresses.values())
+        self._next_address_index = 0
 
     def request_all(self) -> None:
         for address in self.addresses.values():
             self.transport.write(build_encoder_read_command(address))
+
+    def request(self, name: str) -> None:
+        """指定した1台だけにmechPosを要求する。初期化時の確実な読取り用。"""
+        try:
+            address = self.addresses[name]
+        except KeyError as error:
+            raise ValueError(f"未登録のモーター名です: {name}") from error
+        self.transport.write(build_encoder_read_command(address))
+
+    def request_next(self) -> None:
+        """登録済みモーターへ1台ずつ順番にmechPosを要求する。
+
+        USB-AT変換器は短時間に複数の要求を送ると片方の応答を落とすことがある。
+        1回のPID周期では1台だけ送ることで、2台を交互に確実に読む。
+        """
+        if not self._cycle_addresses:
+            return
+        address = self._cycle_addresses[self._next_address_index]
+        self._next_address_index = (self._next_address_index + 1) % len(self._cycle_addresses)
+        self.transport.write(build_encoder_read_command(address))
 
     def poll(self, now: float | None = None) -> list[EncoderFeedback]:
         self._buffer.extend(self.transport.read_available())

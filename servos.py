@@ -64,11 +64,15 @@ class ServoMotors:
         deadline = time.monotonic() + timeout_sec
         values: dict[str, EncoderFeedback] = {}
         while time.monotonic() < deadline and len(values) < 2:
-            self.reader.request_all()
-            time.sleep(0.02)
-            for feedback in self.reader.poll():
-                if feedback.name in {"catch", "lift"}:
-                    values[feedback.name] = feedback
+            # AT変換器が応答を落とさないよう、初期化では1台ずつ50ms待つ。
+            for name in ("catch", "lift"):
+                if name in values:
+                    continue
+                self.reader.request(name)
+                time.sleep(0.05)
+                for feedback in self.reader.poll():
+                    if feedback.name in {"catch", "lift"}:
+                        values[feedback.name] = feedback
         if set(values) != {"catch", "lift"}:
             raise TimeoutError("catch/liftのエンコーダー応答を受信できませんでした")
         self.home_feedbacks(values)
@@ -77,12 +81,13 @@ class ServoMotors:
         """エンコーダーを要求・受信し、両方のPID保持を1回更新する。50Hzで呼ぶ。"""
         with self._lock:
             now = time.monotonic()
-            self.reader.request_all()
+            # まず前周期に送った要求の応答を処理し、その後に次の1台を要求する。
             for feedback in self.reader.poll(now):
                 if feedback.name == "catch":
                     self.catch.update_feedback(feedback)
                 elif feedback.name == "lift":
                     self.lift.update_feedback(feedback)
+            self.reader.request_next()
             # 応答が消えた時、古い速度を出し続けないための安全停止。
             self.catch.watchdog(now)
             self.lift.watchdog(now)

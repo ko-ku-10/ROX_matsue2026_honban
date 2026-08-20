@@ -21,16 +21,18 @@ reader = ATEncoderReader(
 try:
     print("角度監視中。Ctrl+Cで終了。モーターへ速度・有効化指令は送られません。")
     while True:
-        reader.request_all()
-        time.sleep(0.02)
-        for feedback in reader.poll():
-            if feedback.position_rad is not None:
-                print(
-                    f"{feedback.name}: mechPos={feedback.position_rad:+.6f} rad "
-                    f"({degrees(feedback.position_rad):+.2f}°)"
-                )
-            else:
-                print(f"{feedback.name}: 旧AT生値={feedback.count}（mechPos float形式ではありません）")
-        time.sleep(0.08)
+        # USB-AT変換器は同時要求で応答を落とすことがあるため、1台ずつ読む。
+        for name in ("catch", "lift"):
+            reader.request(name)
+            time.sleep(0.05)
+            for feedback in reader.poll():
+                if feedback.position_rad is not None:
+                    print(
+                        f"{feedback.name}: mechPos={feedback.position_rad:+.6f} rad "
+                        f"({degrees(feedback.position_rad):+.2f}°)"
+                    )
+                else:
+                    print(f"{feedback.name}: 旧AT生値={feedback.count}（mechPos float形式ではありません）")
+        time.sleep(0.10)
 finally:
     transport.close()

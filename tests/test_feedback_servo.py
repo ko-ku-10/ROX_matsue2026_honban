@@ -38,6 +38,16 @@ class FeedbackServoTests(unittest.TestCase):
         frame = build_encoder_read_command(0x2C)
         self.assertEqual(frame, bytes.fromhex("41 54 8f e8 00 2c 08 19 70 00 00 00 00 00 00 0d 0a"))
 
+    def test_reader_can_request_one_motor_at_a_time(self):
+        transport = FakeTransport()
+        reader = ATEncoderReader(transport, {"catch": 0x2C, "lift": 0x34})
+        reader.request("lift")
+        reader.request_next()
+        reader.request_next()
+        self.assertEqual(transport.writes[0], build_encoder_read_command(0x34))
+        self.assertEqual(transport.writes[1], build_encoder_read_command(0x2C))
+        self.assertEqual(transport.writes[2], build_encoder_read_command(0x34))
+
     def test_reader_decodes_encoder_frame(self):
         # address 0x2C の応答CAN IDは 0x2F。count=0x1234 little-endian。
         packet = b"AT" + bytes((0x10, 0x00, 0x2F, 0x2C, 0x08, 0x34, 0x12, 0, 0, 0, 0, 0, 0)) + b"\r\n"
