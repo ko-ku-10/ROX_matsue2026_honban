@@ -38,6 +38,7 @@ try:
     print("サーボ単体確認（PIDなし）")
     print("左スティック上下=lift / R1+○=catch正方向 / R1+×=catch逆方向 / OPTIONS=停止終了")
     next_read_at = 0.0
+    last_catch_speed: float | None = None
 
     while True:
         state = controller.read()
@@ -57,6 +58,9 @@ try:
             catch_speed = -TEST_MAX_SPEED
         else:
             catch_speed = 0.0
+        if catch_speed != last_catch_speed:
+            print(f"catch 指令: {catch_speed:+.3f}")
+            last_catch_speed = catch_speed
         lift.set_velocity(lift_speed)
         if catch_speed:
             catch.set_velocity(catch_speed)
