@@ -148,7 +148,7 @@ finally:
 
 ## エンコーダー付きPID位置サーボ
 
-`EncoderPositionServo` は、目標位置とエンコーダー値の差から速度を出します。外力で位置がずれたときも、次のフィードバックで目標位置へ戻ろうとします。
+`EncoderPositionServo` は RobStride の実測角度 `mechPos (0x7019)` を使います。速度を積分して角度を推定しません。外力で位置がずれたときだけ、次の実測値から目標位置へ戻そうとします。
 
 ```python
 from rox_mecanum import ATMotor, EncoderPositionServo, PositionServoConfig
@@ -168,15 +168,15 @@ servo = EncoderPositionServo(
 )
 
 servo.enable(retries=3)
-servo.set_home(raw_count=12345)  # 原点に合わせた時のエンコーダー値
+servo.set_home_radians(position_rad=5.16065)  # mechPosで読んだ現在角度を原点にする
 servo.write(45)                  # 目標角度を45°にする
 servo.read()                      # 現在角度を読む
 servo.is_at_target()              # 目標角度へ到達したか
 servo.hold_current()              # 今いる位置を新しい目標として保持
 servo.release()                   # 保持解除して停止
 
-# エンコーダーを受信するたびに必ず呼ぶ。これが位置保持を行う。
-servo.update(raw_count=12500, now=time.monotonic())
+# mechPos応答を受信するたびに呼ぶ。これが位置保持を行う。
+servo.update_radians(position_rad=5.20, now=time.monotonic())
 
 servo.stop()
 ```
@@ -191,12 +191,11 @@ from servos import open_servos
 
 servos = open_servos()
 try:
-    servos.attach()
-    input("catch/liftを0度に合わせてEnter: ")
-    servos.home_from_feedback()
-    servos.start_pid()  # 以後、内部で50Hzのエンコーダー読取りとPID保持を行う
+servos.attach()
+servos.home_from_feedback()  # 実行時の物理位置を両方とも0°として登録
+servos.start_pid()           # 以後、内部で50Hzのエンコーダー読取りを行う
 
-    servos.catch.write(45)
+servos.catch.write(45)
     servos.lift.write(90)
     time.sleep(5)
 finally:
@@ -210,6 +209,16 @@ servos.catch.write(30)
 servos.lift.hold_current()
 servos.catch.release()
 ```
+
+### 今の位置で固定する
+
+次は起動時の位置をそのまま保持します。`home_from_feedback()` だけではPIDは動きません。`hold_all_current()` を明示的に呼ぶので、開始時の誤差は0°であり、勝手に別の位置へ動くことはありません。
+
+```bash
+python3 hold_current.py
+```
+
+`OPTIONS` でPID解除・停止して終了します。CAN/USB応答が `servo_feedback_timeout_sec`（初期値0.25秒）途切れた場合も、前回の速度を出し続けず停止します。
 
 PIDをモーターごとに切り替えることもできます。
 
@@ -240,11 +249,11 @@ for feedback in reader.poll():
 | `mecanum_speed_percent` | メカナム最高速度 |
 | `catch_min_angle`, `catch_max_angle` | catchの可動範囲（度） |
 | `lift_min_angle`, `lift_max_angle` | liftの可動範囲（度） |
-| `catch_counts_per_degree`, `lift_counts_per_degree` | 1°あたりのエンコーダーカウント。ギヤ比があれば調整する |
 | `catch_pid_kp`, `lift_pid_kp` | 大きいほど復帰が強い。振動したら下げる |
 | `catch_pid_ki`, `lift_pid_ki` | 重力でゆっくりずれ続ける力を打ち消す。振動したら下げる |
 | `servo_max_speed_percent` | PID補正の最高速度 |
 | `servo_tolerance_deg` | この誤差以内なら停止する範囲 |
+| `servo_feedback_timeout_sec` | この時間、角度応答が来なければ安全停止する時間 |
 | `catch_direction`, `lift_direction` | 目標と逆へ動く場合は `-1` |
 | `dashboard_port` | 状態サイトのポート番号 |
 
@@ -288,7 +297,7 @@ python3 direct_can_scan.py
 
 検出されたIDが表示されれば、そのIDを使って`direct_mechpos_probe.py`を実行できます。
 
-サーボは原点を読んだだけでは動きません。`write(角度)`、`hold_current()`、または`pid_on()`を明示的に呼んだ場合だけ位置補正を開始します。
+サーボは原点を読んだだけでは動きません。`write(角度)`、`hold_current()`、または`pid_on()`を明示的に呼んだ場合だけ位置補正を開始します。正式な`mechPos`応答がないときはPID出力しません。
 
 ## PIDを実機で調整する
 
@@ -349,5 +358,5 @@ python3 servo_check.py
 
 - PIDの初回確認は必ず機構を浮かせ、`servo_max_speed_percent` を低くして行います。
 - 角度が逆へ動いたら、すぐ止めて `catch_direction` または `lift_direction` を `-1` にします。
-- `counts_per_degree` が実機のギヤ比と合わないと、表示角度と目標角度がずれます。
+- `mechPos`はradで受信し、ライブラリ内でdegに換算しています。値を速度から積分して角度にしてはいけません。
 - `/dev/ttyUSB0` は1つのプロセスだけが開きます。`run_all.py` を使うときは個別プログラムを終了します。

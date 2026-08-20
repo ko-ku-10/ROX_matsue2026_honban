@@ -113,14 +113,16 @@ class PositionServoConfig:
     direction: int = 1
     ki: float = 0.0
     integral_limit: float = 30.0
+    # この時間を超えてmechPosが届かなければ、前回の速度指令を取り消す。
+    feedback_timeout_sec: float = 0.25
 
     def __post_init__(self) -> None:
         if self.max_angle <= self.min_angle or self.counts_per_degree <= 0.0:
             raise ValueError("角度範囲と counts_per_degree を確認してください")
         if self.kp < 0.0 or self.ki < 0.0 or self.kd < 0.0 or not 0.0 < self.max_speed <= 1.0:
             raise ValueError("PIDとmax_speedの値を確認してください")
-        if self.tolerance_deg < 0.0 or self.integral_limit < 0.0:
-            raise ValueError("tolerance_deg と integral_limit は0以上にしてください")
+        if self.tolerance_deg < 0.0 or self.integral_limit < 0.0 or self.feedback_timeout_sec <= 0.0:
+            raise ValueError("tolerance_deg、integral_limit、feedback_timeout_sec の値を確認してください")
         if self.direction not in (-1, 1):
             raise ValueError("direction は 1 または -1 にしてください")
 
@@ -203,6 +205,10 @@ class EncoderPositionServo:
             raise RuntimeError("先にエンコーダー値を受信して set_home() を呼んでください")
         return self.write(self.current_angle)
 
+    def hold_here(self) -> float:
+        """今いる実測位置を目標にしてPID保持を始める。``hold_current`` の別名。"""
+        return self.hold_current()
+
     def set_pid(
         self,
         *,
@@ -270,6 +276,25 @@ class EncoderPositionServo:
             return self.update_radians(feedback.position_rad, feedback.received_at)
         return None
 
+    def watchdog(self, now: float) -> bool:
+        """角度応答が途切れた場合に停止する。
+
+        PIDのオン状態と目標角度は残すため、通信が復帰すれば次の実測角度から
+        自然に保持を再開する。角度を推定して補正することはしない。
+        """
+        if (
+            self._holding
+            and self.last_feedback_at is not None
+            and now - self.last_feedback_at > self.config.feedback_timeout_sec
+        ):
+            self._integral = 0.0
+            self._last_error = 0.0
+            self._last_update = None
+            self.last_command = 0.0
+            self.motor.stop()
+            return True
+        return False
+
     def _update_control(self, now: float) -> float | None:
         if self.current_angle is None:
             return None
@@ -315,6 +340,7 @@ class EncoderPositionServo:
             "holding": self._holding,
             "at_target": self.is_at_target(),
             "command": self.last_command,
+            "feedback_age_sec": None if self.last_feedback_at is None else max(0.0, monotonic() - self.last_feedback_at),
         }
 
     def _update_angle(self, raw_count: int) -> None:

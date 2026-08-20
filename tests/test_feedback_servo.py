@@ -129,3 +129,15 @@ class FeedbackServoTests(unittest.TestCase):
         self.assertEqual(config.ki, 0.001)
         self.assertEqual(config.max_speed, 0.05)
         self.assertEqual(config.tolerance_deg, 2.0)
+
+    def test_watchdog_stops_if_feedback_is_lost_while_holding(self):
+        motor = FakeMotor()
+        servo = EncoderPositionServo(
+            motor,
+            PositionServoConfig(-90, 90, 100, feedback_timeout_sec=0.2),
+        )
+        servo.set_home_radians(1.0)
+        servo.write(10)
+        servo.update_radians(1.0, 1.0)
+        self.assertTrue(servo.watchdog(1.21))
+        self.assertEqual(motor.speeds[-1], (0.0, True))

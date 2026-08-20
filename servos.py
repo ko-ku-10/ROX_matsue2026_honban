@@ -83,6 +83,9 @@ class ServoMotors:
                     self.catch.update_feedback(feedback)
                 elif feedback.name == "lift":
                     self.lift.update_feedback(feedback)
+            # 応答が消えた時、古い速度を出し続けないための安全停止。
+            self.catch.watchdog(now)
+            self.lift.watchdog(now)
 
     def start_pid(self, hz: float | None = None) -> None:
         """PID更新をバックグラウンドで開始する。以後 ``update()`` は不要。"""
@@ -120,6 +123,17 @@ class ServoMotors:
     def pid_off(self, name: str) -> None:
         """``'catch'`` または ``'lift'`` のPID保持をオフにする。"""
         self._servo(name).pid_off()
+
+    def hold_current(self, name: str) -> float:
+        """指定機構の今の実測位置を、そのまま保持目標にする。"""
+        with self._lock:
+            return self._servo(name).hold_current()
+
+    def hold_all_current(self) -> None:
+        """catch/liftの現在位置をそれぞれ保持する。起動時の固定に使う。"""
+        with self._lock:
+            self.catch.hold_current()
+            self.lift.hold_current()
 
     def set_pid(
         self,
@@ -168,6 +182,7 @@ def _config(name: str) -> PositionServoConfig:
         integral_limit=hensuu.servo_pid_integral_limit,
         max_speed=hensuu.servo_max_speed_percent / 100.0,
         tolerance_deg=hensuu.servo_tolerance_deg,
+        feedback_timeout_sec=hensuu.servo_feedback_timeout_sec,
         direction=getattr(hensuu, f"{name}_direction"),
     )
 

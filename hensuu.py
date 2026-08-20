@@ -41,9 +41,12 @@ catch_pid_ki = 0.002
 lift_pid_ki = 0.000
 servo_pid_kd = 0.000
 servo_pid_integral_limit = 30.0
-servo_max_speed_percent = 20.0
+# 保持の初回確認は低速から。安定後に必要なら少しずつ上げる。
+servo_max_speed_percent = 5.0
 servo_tolerance_deg = 1.0
 encoder_poll_hz = 50.0
+# この時間mechPos応答が来なければ保持出力を停止する（角度の推定はしない）。
+servo_feedback_timeout_sec = 0.25
 
 # 状態表示サイト: http://ロボットのIPアドレス:8000
 dashboard_port = 8000
