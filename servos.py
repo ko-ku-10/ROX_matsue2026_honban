@@ -104,6 +104,27 @@ class ServoMotors:
         """``'catch'`` または ``'lift'`` のPID保持をオフにする。"""
         self._servo(name).pid_off()
 
+    def set_pid(
+        self,
+        name: str,
+        *,
+        kp: float | None = None,
+        ki: float | None = None,
+        kd: float | None = None,
+        max_speed_percent: float | None = None,
+        tolerance_deg: float | None = None,
+    ) -> PositionServoConfig:
+        """指定したサーボのPID値を実行中に変更する。速度は百分率で指定する。"""
+        max_speed = None if max_speed_percent is None else float(max_speed_percent) / 100.0
+        with self._lock:
+            return self._servo(name).set_pid(
+                kp=kp,
+                ki=ki,
+                kd=kd,
+                max_speed=max_speed,
+                tolerance_deg=tolerance_deg,
+            )
+
     def _servo(self, name: str) -> EncoderPositionServo:
         if name == "catch":
             return self.catch

@@ -248,6 +248,30 @@ for feedback in reader.poll():
 | `catch_direction`, `lift_direction` | 目標と逆へ動く場合は `-1` |
 | `dashboard_port` | 状態サイトのポート番号 |
 
+## PIDを実機で調整する
+
+`pid_tuner.py` は、`hensuu.py`を編集・再起動せずにPID値を試すための調整専用プログラムです。
+起動時の物理位置を目標位置にして保持を始めます。`OPTIONS`は非常停止して終了です。
+
+```bash
+python3 pid_tuner.py
+```
+
+ターミナルへ次の形式で入力します。変更値は**実行中だけ**有効です。安定した値を見つけたら、同じ値を`hensuu.py`へ写してください。
+
+```text
+show                    # 現在のPID設定・角度・出力状態を表示
+catch kp 0.003          # catchのPを変更
+lift ki 0               # liftのIを0にする
+both max 5              # 両方の最大PID速度を5%にする
+both deadband 3         # 両方の停止範囲を±3°にする
+catch hold              # catchの今の位置を保持
+lift off                # liftのPIDを解除
+quit                    # 安全停止して終了
+```
+
+調整は `I=0`、`D=0`、`max=5` から開始し、まずPだけを少しずつ上げてください。
+
 ## 安全上の注意
 
 - PIDの初回確認は必ず機構を浮かせ、`servo_max_speed_percent` を低くして行います。

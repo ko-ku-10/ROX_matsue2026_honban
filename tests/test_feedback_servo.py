@@ -63,6 +63,19 @@ class FeedbackServoTests(unittest.TestCase):
         servo.release()
         self.assertFalse(servo.status()["holding"])
 
+    def test_deadband_stops_motor_near_target(self):
+        motor = FakeMotor()
+        servo = EncoderPositionServo(
+            motor,
+            PositionServoConfig(-90, 90, 100, kp=0.02, max_speed=0.5, tolerance_deg=2.0),
+        )
+        servo.set_home(1000)
+        servo.write(10.0)
+        # 現在9°は目標10°との差が1°なので、出力しない。
+        command = servo.update(1900, 1.0)
+        self.assertEqual(command, 0.0)
+        self.assertEqual(motor.speeds[-1], (0.0, True))
+
     def test_pid_on_off_aliases(self):
         motor = FakeMotor()
         servo = EncoderPositionServo(motor, PositionServoConfig(-90, 90, 100))
@@ -71,3 +84,12 @@ class FeedbackServoTests(unittest.TestCase):
         self.assertFalse(servo.pid_enabled)
         servo.pid_on()
         self.assertTrue(servo.pid_enabled)
+
+    def test_pid_can_be_changed_while_running(self):
+        motor = FakeMotor()
+        servo = EncoderPositionServo(motor, PositionServoConfig(-90, 90, 100, kp=0.02, max_speed=0.5))
+        config = servo.set_pid(kp=0.003, ki=0.001, max_speed=0.05, tolerance_deg=2.0)
+        self.assertEqual(config.kp, 0.003)
+        self.assertEqual(config.ki, 0.001)
+        self.assertEqual(config.max_speed, 0.05)
+        self.assertEqual(config.tolerance_deg, 2.0)

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from time import monotonic
 from typing import Mapping
 
@@ -72,8 +72,8 @@ class PositionServoConfig:
             raise ValueError("角度範囲と counts_per_degree を確認してください")
         if self.kp < 0.0 or self.ki < 0.0 or self.kd < 0.0 or not 0.0 < self.max_speed <= 1.0:
             raise ValueError("PIDとmax_speedの値を確認してください")
-        if self.integral_limit < 0.0:
-            raise ValueError("integral_limit は0以上にしてください")
+        if self.tolerance_deg < 0.0 or self.integral_limit < 0.0:
+            raise ValueError("tolerance_deg と integral_limit は0以上にしてください")
         if self.direction not in (-1, 1):
             raise ValueError("direction は 1 または -1 にしてください")
 
@@ -136,6 +136,34 @@ class EncoderPositionServo:
             raise RuntimeError("先にエンコーダー値を受信して set_home() を呼んでください")
         return self.write(self.current_angle)
 
+    def set_pid(
+        self,
+        *,
+        kp: float | None = None,
+        ki: float | None = None,
+        kd: float | None = None,
+        max_speed: float | None = None,
+        tolerance_deg: float | None = None,
+    ) -> PositionServoConfig:
+        """PID設定を実行中に変更する。指定しなかった値は維持する。"""
+        changes = {
+            key: value
+            for key, value in {
+                "kp": kp,
+                "ki": ki,
+                "kd": kd,
+                "max_speed": max_speed,
+                "tolerance_deg": tolerance_deg,
+            }.items()
+            if value is not None
+        }
+        self.config = replace(self.config, **changes)
+        # 調整値の変更前にたまったI項やD項を持ち越さない。
+        self._integral = 0.0
+        self._last_error = 0.0
+        self._last_update = None
+        return self.config
+
     def release(self) -> None:
         """PID保持を解除し、モーターを停止する。"""
         self._holding = False
@@ -153,7 +181,7 @@ class EncoderPositionServo:
         return self._holding
 
     def is_at_target(self) -> bool:
-        """現在角度が許容誤差内かを返す。保持は誤差内でも継続する。"""
+        """現在角度が許容誤差内かを返す。"""
         return self.current_angle is not None and abs(self.target_angle - self.current_angle) <= self.config.tolerance_deg
 
     def update(self, raw_count: int, now: float) -> float | None:
@@ -164,6 +192,16 @@ class EncoderPositionServo:
             self.motor.stop()
             return 0.0
         error = self.target_angle - self.current_angle
+        # 目標の近くでは出力を止める。細かい測定値の揺れによる
+        # 正逆転の繰り返し（ガタガタ）を防ぎ、範囲外にずれた時だけ再補正する。
+        if abs(error) <= self.config.tolerance_deg:
+            self._integral = 0.0
+            self._last_error = 0.0
+            self._last_update = now
+            self.last_feedback_at = now
+            self.last_command = 0.0
+            self.motor.set_velocity(0.0, force=True)
+            return 0.0
         dt = 0.0 if self._last_update is None else max(0.001, now - self._last_update)
         derivative = 0.0 if dt == 0.0 else (error - self._last_error) / dt
         if dt > 0.0:
