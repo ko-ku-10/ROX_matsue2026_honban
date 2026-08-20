@@ -300,7 +300,7 @@ python3 servo_check.py
 ```
 
 - 左スティック上下: lift
-- 右スティック上下: catch
+- R1 + 右スティック上下: catch（R1を離すと停止）
 - OPTIONS: 両方を停止して終了
 
 ## 安全上の注意
