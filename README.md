@@ -248,6 +248,24 @@ for feedback in reader.poll():
 | `catch_direction`, `lift_direction` | 目標と逆へ動く場合は `-1` |
 | `dashboard_port` | 状態サイトのポート番号 |
 
+## RobStride 05の角度取得と安全なサーボ動作
+
+RobStrideの正式な位置値は`0x7019`の`mechPos`です。これは負荷側の多回転機械角度で、単位は`rad`（float）です。ライブラリはこの正式応答を受信できた場合だけ、内部で度へ変換して位置制御します。
+
+```bash
+python3 angle_monitor.py
+```
+
+このプログラムは**モーターを有効化・回転させず、角度を読むだけ**です。表示が`mechPos=... rad (...°)`になれば正式な角度読取りができています。`旧AT生値=...`の場合は、USB-AT変換器が別形式を返しているため、PIDは出力せず安全に停止したままです。
+
+`旧AT生値`になる場合は、次を実行して生フレームを確認します。これはモーターの有効化・速度指令を一切送りません。
+
+```bash
+python3 at_mechpos_probe.py
+```
+
+サーボは原点を読んだだけでは動きません。`write(角度)`、`hold_current()`、または`pid_on()`を明示的に呼んだ場合だけ位置補正を開始します。
+
 ## PIDを実機で調整する
 
 `pid_tuner.py` は、`hensuu.py`を編集・再起動せずにPID値を試すための調整専用プログラムです。

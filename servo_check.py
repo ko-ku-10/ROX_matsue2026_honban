@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from math import degrees
 
 import hensuu
 from rox_mecanum import ATEncoderReader, ATMotor, Button, PygameDualSense, PySerialTransport, at_address_from_can_id
@@ -72,10 +73,15 @@ try:
             reader.request_all()
             next_read_at = now + 0.1
         for feedback in reader.poll(now):
+            position = (
+                f"mechPos={degrees(feedback.position_rad):+.2f}°"
+                if feedback.position_rad is not None
+                else f"旧AT生値={feedback.count}"
+            )
             print(
                 f"{feedback.name}: 速度指令="
                 f"{lift_speed if feedback.name == 'lift' else catch_speed:+.3f} "
-                f"encoder={feedback.count:5d}"
+                f"{position}"
             )
 
         time.sleep(0.01)

@@ -1,4 +1,5 @@
 import unittest
+from struct import pack
 
 from rox_mecanum.feedback_servo import ATEncoderReader, EncoderPositionServo, PositionServoConfig
 
@@ -39,6 +40,14 @@ class FeedbackServoTests(unittest.TestCase):
         feedback = reader.poll(now=1.0)
         self.assertEqual(feedback[0].name, "catch")
         self.assertEqual(feedback[0].count, 0x1234)
+
+    def test_reader_decodes_official_mech_pos_as_radians(self):
+        # 正式なタイプ17応答: byte0-1=0x7019、byte4-7=float mechPos[rad]。
+        data = bytes((0x19, 0x70, 0, 0)) + pack("<f", 1.5)
+        packet = b"AT" + bytes((0x10, 0x00, 0x2F, 0x2C, 0x08)) + data + b"\r\n"
+        reader = ATEncoderReader(FakeTransport(packet), {"catch": 0x2C})
+        feedback = reader.poll(now=1.0)[0]
+        self.assertAlmostEqual(feedback.position_rad, 1.5)
 
     def test_position_servo_corrects_external_displacement(self):
         motor = FakeMotor()
@@ -84,6 +93,25 @@ class FeedbackServoTests(unittest.TestCase):
         self.assertFalse(servo.pid_enabled)
         servo.pid_on()
         self.assertTrue(servo.pid_enabled)
+
+    def test_home_does_not_enable_pid_or_move_motor(self):
+        motor = FakeMotor()
+        servo = EncoderPositionServo(motor, PositionServoConfig(-90, 90, 100))
+        servo.set_home_radians(2.0)
+        self.assertFalse(servo.pid_enabled)
+        servo.update_radians(2.1, 1.0)
+        # set_home_radians() の安全停止以外、命令なしで速度出力を出さない。
+        self.assertEqual(motor.speeds, [(0.0, True)])
+
+    def test_unverified_legacy_feedback_never_drives_pid(self):
+        motor = FakeMotor()
+        servo = EncoderPositionServo(motor, PositionServoConfig(-90, 90, 100, kp=0.02))
+        servo.set_home_radians(1.0)
+        servo.write(30.0)
+        legacy = type("Feedback", (), {"position_rad": None, "count": 2000, "received_at": 1.0})()
+        self.assertIsNone(servo.update_feedback(legacy))
+        # set_home_radians()の停止以外に、未確認値による速度指令は出ない。
+        self.assertEqual(motor.speeds, [(0.0, True)])
 
     def test_pid_can_be_changed_while_running(self):
         motor = FakeMotor()

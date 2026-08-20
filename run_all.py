@@ -15,6 +15,7 @@ from rox_mecanum import (
     AT_NEUTRAL_VALUE,
     Button,
     DualSenseMotionMapping,
+    EncoderFeedback,
     MecanumMixer,
     MecanumRobot,
     PySerialTransport,
@@ -68,14 +69,14 @@ def _start_dashboard(status: RobotStatus, port: int) -> ThreadingHTTPServer:
     return server
 
 
-def _wait_for_home(reader: ATEncoderReader, addresses: dict[str, int]) -> dict[str, int]:
+def _wait_for_home(reader: ATEncoderReader, addresses: dict[str, int]) -> dict[str, EncoderFeedback]:
     deadline = time.monotonic() + 5.0
-    values: dict[str, int] = {}
+    values: dict[str, EncoderFeedback] = {}
     while time.monotonic() < deadline and set(values) != set(addresses):
         reader.request_all()
         time.sleep(0.02)
         for feedback in reader.poll():
-            values[feedback.name] = feedback.count
+            values[feedback.name] = feedback
     missing = set(addresses) - set(values)
     if missing:
         raise TimeoutError(f"エンコーダー応答なし: {', '.join(sorted(missing))}")
@@ -117,13 +118,16 @@ def main() -> None:
 
         input("catch/liftを機械的な0度へ合わせてから Enter: ")
         homes = _wait_for_home(reader, {"catch": catch_address, "lift": lift_address})
-        servos.home(homes["catch"], homes["lift"])
+        servos.home_feedbacks(homes)
         mapping = DualSenseMotionMapping(deadzone=0.08, rotation_enable=Button.R2 if hensuu.mecanum_rotation_requires_r2 else None)
         control_interval = 1.0 / 50.0
         next_query_at = 0.0
         next_drive_at = 0.0
         solenoid_until = 0.0
-        latest_counts: dict[str, int] = homes
+        latest_positions: dict[str, float | int | None] = {
+            name: feedback.position_rad if feedback.position_rad is not None else feedback.count
+            for name, feedback in homes.items()
+        }
         status.set(message="運転中", dashboard_url=f"http://{host}:{hensuu.dashboard_port}")
 
         while True:
@@ -162,11 +166,11 @@ def main() -> None:
                 reader.request_all()
                 next_query_at = started + 1.0 / hensuu.encoder_poll_hz
             for feedback in reader.poll(started):
-                latest_counts[feedback.name] = feedback.count
+                latest_positions[feedback.name] = feedback.position_rad if feedback.position_rad is not None else feedback.count
                 if feedback.name == "catch":
-                    catch.update(feedback.count, started)
+                    catch.update_feedback(feedback)
                 elif feedback.name == "lift":
-                    lift.update(feedback.count, started)
+                    lift.update_feedback(feedback)
 
             # エンコーダー通信が途切れたら、最後の補正速度を残さず停止する。
             if catch.last_feedback_at is not None and started - catch.last_feedback_at > 0.20:
@@ -175,7 +179,7 @@ def main() -> None:
                 lift.stop()
 
             status.set(
-                encoder_counts=latest_counts,
+                encoder_positions=latest_positions,
                 catch=catch.status(),
                 lift=lift.status(),
                 solenoid=bool(solenoid_until),

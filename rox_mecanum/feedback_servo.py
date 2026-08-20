@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from math import degrees, isfinite
+from struct import unpack
 from time import monotonic
 from typing import Mapping
 
@@ -25,8 +27,11 @@ def build_encoder_read_command(motor_address: int) -> bytes:
 class EncoderFeedback:
     name: str
     address: int
-    count: int
+    count: int | None
     received_at: float
+    # RobStride正式形式のmechPos(0x7019): load側の多回転機械角[rad]。
+    # AT変換器が旧ステータス形式しか返さない場合はNoneになり、countを使う。
+    position_rad: float | None = None
 
 
 class ATEncoderReader:
@@ -50,7 +55,15 @@ class ATEncoderReader:
         for _, can_id, address, data in _take_at_frames(self._buffer):
             name = self._by_status_id.get(can_id) or self._by_status_id.get(can_id & 0xFF) or self._by_address.get(address)
             if name is not None and len(data) >= 2:
-                values.append(EncoderFeedback(name, self.addresses[name], int.from_bytes(data[:2], "little"), timestamp))
+                values.append(
+                    EncoderFeedback(
+                        name,
+                        self.addresses[name],
+                        int.from_bytes(data[:2], "little"),
+                        timestamp,
+                        _decode_mech_pos(data),
+                    )
+                )
         return values
 
 
@@ -87,13 +100,15 @@ class EncoderPositionServo:
         self.target_angle = 0.0
         self.current_angle: float | None = None
         self._home_unwrapped: int | None = None
+        self._home_position_rad: float | None = None
         self._last_raw: int | None = None
         self._unwrapped = 0
         self._last_error = 0.0
         self._last_update: float | None = None
         self.last_feedback_at: float | None = None
         self._integral = 0.0
-        self._holding = True
+        # write()/hold_current()などの明示命令があるまで、絶対に出力しない。
+        self._holding = False
         self.last_command = 0.0
 
     def enable(self, retries: int = 3) -> None:
@@ -106,11 +121,29 @@ class EncoderPositionServo:
         self._home_unwrapped = self._unwrapped
         self.current_angle = float(angle)
         self.target_angle = self._limit(angle)
+        self._home_position_rad = None
         self._last_error = 0.0
         self._last_update = None
         self.last_feedback_at = None
         self._integral = 0.0
-        self._holding = True
+        self._holding = False
+        self.motor.stop()
+
+    def set_home_radians(self, position_rad: float, angle: float = 0.0) -> None:
+        """RobStride正式のmechPos[rad]を基準に、現在位置を登録する。"""
+        if not isfinite(position_rad):
+            raise ValueError("position_rad は有限の値にしてください")
+        self._home_position_rad = float(position_rad)
+        self._home_unwrapped = None
+        self._last_raw = None
+        self.current_angle = float(angle)
+        self.target_angle = self._limit(angle)
+        self._last_error = 0.0
+        self._last_update = None
+        self.last_feedback_at = None
+        self._integral = 0.0
+        self._holding = False
+        self.motor.stop()
 
     def write(self, angle: float) -> float:
         """目標角度を指定し、以後その位置をPIDで保持する。Arduino Servoの ``write`` 相当。"""
@@ -186,8 +219,27 @@ class EncoderPositionServo:
 
     def update(self, raw_count: int, now: float) -> float | None:
         self._update_angle(raw_count)
+        return self._update_control(now)
+
+    def update_radians(self, position_rad: float, now: float) -> float | None:
+        """RobStrideのmechPos[rad]でサーボ状態を更新する。"""
+        if self._home_position_rad is None:
+            return None
+        if not isfinite(position_rad):
+            return None
+        self.current_angle = degrees(float(position_rad) - self._home_position_rad)
+        return self._update_control(now)
+
+    def update_feedback(self, feedback: EncoderFeedback) -> float | None:
+        """正式なmechPos応答でだけ更新する。未確認の旧AT生値では出力しない。"""
+        if feedback.position_rad is not None and self._home_position_rad is not None:
+            return self.update_radians(feedback.position_rad, feedback.received_at)
+        return None
+
+    def _update_control(self, now: float) -> float | None:
         if self.current_angle is None:
             return None
+        self.last_feedback_at = now
         if not self._holding:
             # release() で停止フレームはすでに1回送っている。
             # 以後はエンコーダーだけ読み、不要な停止フレームを連続送信しない。
@@ -249,6 +301,19 @@ class EncoderPositionServo:
 
     def _limit(self, angle: float) -> float:
         return max(self.config.min_angle, min(self.config.max_angle, float(angle)))
+
+
+def _decode_mech_pos(data: bytes) -> float | None:
+    """RobStrideタイプ17応答からmechPos(0x7019)のfloat[rad]を読む。
+
+    正式応答は data[0:2] がレジスタ番号、data[4:8] がlittle-endian float。
+    AT変換器が別形式のステータスを返す場合はNoneとして、安全に従来形式へ
+    フォールバックする。
+    """
+    if len(data) != 8 or int.from_bytes(data[:2], "little") != ENCODER_REGISTER:
+        return None
+    position_rad = unpack("<f", data[4:8])[0]
+    return position_rad if isfinite(position_rad) else None
 
 
 def _take_at_frames(buffer: bytearray) -> list[tuple[int, int, int, bytes]]:

@@ -9,6 +9,7 @@ from threading import Event, Lock, Thread, current_thread
 import hensuu
 from rox_mecanum import (
     ATEncoderReader,
+    EncoderFeedback,
     ATMotor,
     EncoderPositionServo,
     PositionServoConfig,
@@ -45,19 +46,32 @@ class ServoMotors:
         self.catch.set_home(catch_count)
         self.lift.set_home(lift_count)
 
+    def home_feedbacks(self, values: dict[str, EncoderFeedback]) -> None:
+        """最新の角度応答を原点として登録する。登録後もPIDはオフのまま。"""
+        for name in ("catch", "lift"):
+            feedback = values[name]
+            servo = self._servo(name)
+            if feedback.position_rad is not None:
+                servo.set_home_radians(feedback.position_rad)
+            else:
+                raise RuntimeError(
+                    f"{name} から正式mechPos(0x7019 float)を受信できませんでした。"
+                    "angle_monitor.pyでAT応答形式を確認してください"
+                )
+
     def home_from_feedback(self, timeout_sec: float = 5.0) -> None:
         """最新フィードバックを待ち、現在位置を両方の0°として登録する。"""
         deadline = time.monotonic() + timeout_sec
-        values: dict[str, int] = {}
+        values: dict[str, EncoderFeedback] = {}
         while time.monotonic() < deadline and len(values) < 2:
             self.reader.request_all()
             time.sleep(0.02)
             for feedback in self.reader.poll():
                 if feedback.name in {"catch", "lift"}:
-                    values[feedback.name] = feedback.count
+                    values[feedback.name] = feedback
         if set(values) != {"catch", "lift"}:
             raise TimeoutError("catch/liftのエンコーダー応答を受信できませんでした")
-        self.home(values["catch"], values["lift"])
+        self.home_feedbacks(values)
 
     def update(self) -> None:
         """エンコーダーを要求・受信し、両方のPID保持を1回更新する。50Hzで呼ぶ。"""
@@ -66,9 +80,9 @@ class ServoMotors:
             self.reader.request_all()
             for feedback in self.reader.poll(now):
                 if feedback.name == "catch":
-                    self.catch.update(feedback.count, feedback.received_at)
+                    self.catch.update_feedback(feedback)
                 elif feedback.name == "lift":
-                    self.lift.update(feedback.count, feedback.received_at)
+                    self.lift.update_feedback(feedback)
 
     def start_pid(self, hz: float | None = None) -> None:
         """PID更新をバックグラウンドで開始する。以後 ``update()`` は不要。"""

@@ -38,7 +38,7 @@ from .serial_at import (
     normalized_to_at_value,
 )
 from .timed_servo import TimedServo, TimedServoConfig
-from .feedback_servo import ATEncoderReader, EncoderPositionServo, PositionServoConfig
+from .feedback_servo import ATEncoderReader, EncoderFeedback, EncoderPositionServo, PositionServoConfig
 
 __all__ = [
     "AT_NEUTRAL_VALUE",
@@ -61,6 +61,7 @@ __all__ = [
     "TimedServo",
     "TimedServoConfig",
     "ATEncoderReader",
+    "EncoderFeedback",
     "EncoderPositionServo",
     "PositionServoConfig",
     "WheelSpeeds",
