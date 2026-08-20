@@ -280,6 +280,14 @@ python3 direct_mechpos_probe.py
 
 成功時は`mechPos=... rad (...°)`と表示されます。このプログラムもモーターの有効化・速度指令を送りません。`SLCANを開けませんでした`または`応答なし`なら、変換器のファームウェア・CAN配線・終端抵抗・CAN 1Mbps設定を確認します。
 
+`direct_mechpos_probe.py`が応答なしの場合は、先に標準GET_IDでCAN到達だけを確認します。
+
+```bash
+python3 direct_can_scan.py
+```
+
+検出されたIDが表示されれば、そのIDを使って`direct_mechpos_probe.py`を実行できます。
+
 サーボは原点を読んだだけでは動きません。`write(角度)`、`hold_current()`、または`pid_on()`を明示的に呼んだ場合だけ位置補正を開始します。
 
 ## PIDを実機で調整する
