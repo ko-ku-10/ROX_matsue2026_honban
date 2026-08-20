@@ -36,7 +36,7 @@ try:
         time.sleep(0.05)
 
     print("サーボ単体確認（PIDなし）")
-    print("左スティック上下=lift / R1 + 右スティック上下=catch / OPTIONS=停止終了")
+    print("左スティック上下=lift / R1+○=catch正方向 / R1+×=catch逆方向 / OPTIONS=停止終了")
     next_read_at = 0.0
 
     while True:
@@ -48,11 +48,20 @@ try:
             break
 
         lift_speed = stick_speed(state.left_stick.y)
-        # catchはR1を押している間だけ動かす。右スティックの微小なずれで
-        # 意図せず回り続けることを防ぐ。
-        catch_speed = stick_speed(state.right_stick.y) if state.button(Button.R1) else 0.0
+        # catchは右スティックを使わない。R1+○とR1+×で正逆転を明確に分ける。
+        # 右スティックの中立ずれ・軸割当の違いによる誤動作を避けるため。
+        catch_armed = state.button(Button.R1)
+        if catch_armed and state.button(Button.CIRCLE) and not state.button(Button.CROSS):
+            catch_speed = TEST_MAX_SPEED
+        elif catch_armed and state.button(Button.CROSS) and not state.button(Button.CIRCLE):
+            catch_speed = -TEST_MAX_SPEED
+        else:
+            catch_speed = 0.0
         lift.set_velocity(lift_speed)
-        catch.set_velocity(catch_speed)
+        if catch_speed:
+            catch.set_velocity(catch_speed)
+        else:
+            catch.stop()
 
         now = time.monotonic()
         if now >= next_read_at:
