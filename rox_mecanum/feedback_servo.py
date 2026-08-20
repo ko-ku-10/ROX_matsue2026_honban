@@ -189,7 +189,8 @@ class EncoderPositionServo:
         if self.current_angle is None:
             return None
         if not self._holding:
-            self.motor.stop()
+            # release() で停止フレームはすでに1回送っている。
+            # 以後はエンコーダーだけ読み、不要な停止フレームを連続送信しない。
             return 0.0
         error = self.target_angle - self.current_angle
         # 目標の近くでは出力を止める。細かい測定値の揺れによる
