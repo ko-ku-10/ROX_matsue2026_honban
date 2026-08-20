@@ -1,7 +1,7 @@
 import unittest
 from struct import pack
 
-from rox_mecanum.feedback_servo import ATEncoderReader, EncoderPositionServo, PositionServoConfig
+from rox_mecanum.feedback_servo import ATEncoderReader, EncoderPositionServo, PositionServoConfig, build_encoder_read_command
 
 
 class FakeTransport:
@@ -32,6 +32,12 @@ class FakeMotor:
 
 
 class FeedbackServoTests(unittest.TestCase):
+    def test_mech_pos_request_uses_type17_at_extended_id(self):
+        # CAN ID 5: type17 / host FD / motor 05 = 0x11FD0005。
+        # AT形式では3bit左シフトして下位3bitを0b100にする。
+        frame = build_encoder_read_command(0x2C)
+        self.assertEqual(frame, bytes.fromhex("41 54 8f e8 00 2c 08 19 70 00 00 00 00 00 00 0d 0a"))
+
     def test_reader_decodes_encoder_frame(self):
         # address 0x2C の応答CAN IDは 0x2F。count=0x1234 little-endian。
         packet = b"AT" + bytes((0x10, 0x00, 0x2F, 0x2C, 0x08, 0x34, 0x12, 0, 0, 0, 0, 0, 0)) + b"\r\n"

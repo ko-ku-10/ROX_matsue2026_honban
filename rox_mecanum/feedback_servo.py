@@ -15,9 +15,22 @@ COUNTS_PER_REV = 65536
 
 
 def build_encoder_read_command(motor_address: int) -> bytes:
-    """レジスタ0x7019（16-bitエンコーダー）を読む17バイトATフレーム。"""
+    """RobStride type17でmechPos(0x7019)を読む17バイトATフレーム。
+
+    RobStride公式AT変換器は、拡張CAN IDを3bit左へずらし、下位3bitへ
+    ``0b100`` を付けて送る。従来の ``90 07 E8`` はtype18（書込み）なので
+    読取りには使わない。
+    """
+    motor_id = _can_id_from_at_address(motor_address)
+    ext_can_id = (0x11 << 24) | (0xFD << 16) | motor_id
+    at_extended_id = (ext_can_id << 3) | 0x04
     return bytes((
-        0x41, 0x54, 0x90, 0x07, 0xE8, int(motor_address), 0x08,
+        0x41, 0x54,
+        (at_extended_id >> 24) & 0xFF,
+        (at_extended_id >> 16) & 0xFF,
+        (at_extended_id >> 8) & 0xFF,
+        at_extended_id & 0xFF,
+        0x08,
         ENCODER_REGISTER & 0xFF, ENCODER_REGISTER >> 8,
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0D, 0x0A,
     ))
@@ -314,6 +327,14 @@ def _decode_mech_pos(data: bytes) -> float | None:
         return None
     position_rad = unpack("<f", data[4:8])[0]
     return position_rad if isfinite(position_rad) else None
+
+
+def _can_id_from_at_address(address: int) -> int:
+    """既存AT宛先値 ``(CAN ID << 3) + 4`` からCAN IDを戻す。"""
+    address = int(address)
+    if address < 4 or (address - 4) % 8:
+        raise ValueError("AT宛先値が不正です")
+    return (address - 4) // 8
 
 
 def _take_at_frames(buffer: bytearray) -> list[tuple[int, int, int, bytes]]:
