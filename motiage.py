@@ -26,23 +26,17 @@ try:
         if state.button(Button.OPTIONS):
             break
 
-        if state.was_pressed(Button.CIRCLE):
+        if state.was_pressed(Button.TRIANGLE):
             # 初期位置へ
-            servos.catch.write(hiraki)
-            servos.lift.write(sage)
-            time.sleep(1.0)
+            servos.catch.write(-20)
+            servos.lift.write(0)
+            time.sleep(2.0)
 
-            # ボールを掴む
-            servos.catch.write(tozi)
-            time.sleep(1.0)
+            servos.lift.write(-90)
+            time.sleep(2.0)
 
-            # ボールを装填
-            servos.lift.write(age)
-            time.sleep(1.0)
-
-            # 初期位置へ戻す
-            servos.catch.write(hiraki)
-            servos.lift.write(sage)
+            servos.catch.write(0)
+            time.sleep(2.0)
 
         time.sleep(0.02)
 
