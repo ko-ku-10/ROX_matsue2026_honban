@@ -8,6 +8,7 @@ hiraki = 20
 tozi = 10    
 age = -10    
 sage = -100  
+basyo = "原点"
 
 servos = open_servos()
 controller = PygameDualSense.open()
@@ -21,9 +22,35 @@ try:
     while True:
         state = controller.read()
 
-            # 初期位置へ
-        servos.lift.write(100)
-        time.sleep(2.0)
+        if state.buttons[Button.CREATE]:
+            if basyo == "原点":
+                servos.catch.write(0)
+                servos.lift.write(105)
+                print("下に移動")
+                time.sleep(2.0)
+                basyo = "下"
+            
+            elif basyo == "下":
+                servos.catch.write(0)
+                servos.lift.write(0)
+                print("原点に移動")
+                time.sleep(2.0)
+                basyo = "原点"
+                
+        if state.buttons[Button.TRIANGLE]:
+            print("掴みます")
+            servos.lift.write(105)
+            while 
+
+            servos.catch.write(-70)
+            time.sleep(2.0)
+
+            servos.lift.write(0)
+            time.sleep(3.0)
+
+            servos.catch.write(0)
+            time.sleep(2.0)
+
 
 
         time.sleep(0.02)

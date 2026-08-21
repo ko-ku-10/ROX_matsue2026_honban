@@ -10,8 +10,8 @@ mecanum_rotation_requires_r2 = True
 
 # catch: CAN ID 5、時間式サーボ
 catch_can_id = 5
-catch_min_angle = 0
-catch_max_angle = 30
+catch_min_angle = -360
+catch_max_angle = 360
 # 90度を15%で測定した値を基準に、実際は7.5%でゆっくり動かす。
 catch_calibration_speed_percent = 7.5
 catch_move_speed_percent = 7.5
@@ -22,8 +22,8 @@ catch_brake_time_sec = 0.08        # 停止前に減速する時間。反動が�
 # lift: CAN ID 6、時間式サーボ
 # 90度の時間はliftで測定してから入力する。0.0のままでは安全のため動かない。
 lift_can_id = 6
-lift_min_angle = -100.0
-lift_max_angle = 0
+lift_min_angle = -360
+lift_max_angle = 360
 lift_calibration_speed_percent = 15.0
 lift_move_speed_percent = 7.5
 lift_90deg_time_sec = 0.124
