@@ -34,20 +34,20 @@ lift_brake_time_sec = 0.08
 # 直結なら 65536 / 360。ギヤがある場合は実機角度に合わせて増減する。
 catch_counts_per_degree = 65536.0 / 360.0
 lift_counts_per_degree = 65536.0 / 360.0
-# 保持の初期値: 大きすぎると補正がカチャカチャするため低めにする。
-catch_pid_kp = 0.008
-lift_pid_kp = 0.002
+# 保持の反応。停止範囲を小さくしたため、弱すぎるP値では戻りが遅くなる。
+catch_pid_kp = 0.015
+lift_pid_kp = 0.003
 # 重力などで同じ方向へずれ続ける場合に、少しずつ保持力を増やす。
 catch_pid_ki = 0.002
 lift_pid_ki = 0.000
 servo_pid_kd = 0.000
 servo_pid_integral_limit = 30.0
 # 保持の初回確認は低速から。安定後に必要なら少しずつ上げる。
-# 1周期で1台ずつ読むため、100Hzなら各モーターは50Hzで実測角度を更新する。
-# 小さい速度で細かく補正して、反動とカチャカチャを抑える。
-servo_max_speed_percent = 2.0
-servo_tolerance_deg = 0.8
-encoder_poll_hz = 100.0
+# 1周期で1台ずつ読むため、200Hzなら各モーターは100Hzで実測角度を更新する。
+# ±0.2°を超えた直後から低速で戻す。力を受けた直後の位置ずれを小さくする。
+servo_max_speed_percent = 3.0
+servo_tolerance_deg = 0.2
+encoder_poll_hz = 200.0
 # この時間mechPos応答が来なければ保持出力を停止する（角度の推定はしない）。
 servo_feedback_timeout_sec = 0.25
 
