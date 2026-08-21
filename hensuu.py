@@ -46,6 +46,8 @@ servo_pid_integral_limit = 30.0
 # 1周期で1台ずつ読むため、200Hzなら各モーターは100Hzで実測角度を更新する。
 # ±0.2°を超えた直後から低速で戻す。力を受けた直後の位置ずれを小さくする。
 servo_max_speed_percent = 3.0
+# motiage.pyで目標角度へ動かす時だけ使う上限。保持用の3%とは分ける。
+motiage_move_speed_percent = 10.0
 servo_tolerance_deg = 0.2
 encoder_poll_hz = 200.0
 # この時間mechPos応答が来なければ保持出力を停止する（角度の推定はしない）。
