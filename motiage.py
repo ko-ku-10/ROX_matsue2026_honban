@@ -26,17 +26,11 @@ try:
         if state.button(Button.OPTIONS):
             break
 
-        if state.was_pressed(Button.TRIANGLE):
             # 初期位置へ
-            servos.catch.write(-20)
             servos.lift.write(0)
+            
             time.sleep(2.0)
 
-            servos.lift.write(-90)
-            time.sleep(2.0)
-
-            servos.catch.write(0)
-            time.sleep(2.0)
 
         time.sleep(0.02)
 
