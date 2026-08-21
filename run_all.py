@@ -9,7 +9,6 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import hensuu
-from gpiozero import LED
 from rox_mecanum import (
     AT_NEUTRAL_VALUE,
     Button,
@@ -19,6 +18,7 @@ from rox_mecanum import (
     PySerialTransport,
     PygameDualSense,
 )
+from rox_mecanum.solenoid import RDKSolenoid
 from servos import open_servos
 
 
@@ -82,7 +82,7 @@ def main() -> None:
     try:
         controller = PygameDualSense.open()
         transport = PySerialTransport.open(hensuu.serial_port, hensuu.serial_baud, minimum_interval=0.0008)
-        solenoid = LED(hensuu.solenoid_pin)
+        solenoid = RDKSolenoid(hensuu.solenoid_pin)
         mecanum = MecanumRobot(
             transport,
             motor_ids={"FL": 0x0C, "FR": 0x14, "RL": 0x1C, "RR": 0x24},
@@ -205,7 +205,7 @@ def main() -> None:
         if servos is not None:
             servos.release()
         if solenoid is not None:
-            solenoid.off()
+            solenoid.close()
         if transport is not None:
             transport.close()
         if controller is not None:

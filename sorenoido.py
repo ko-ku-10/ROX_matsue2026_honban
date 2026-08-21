@@ -3,12 +3,12 @@
 import time
 
 import hensuu
-from gpiozero import LED
 from rox_mecanum import Button, PygameDualSense
+from rox_mecanum.solenoid import RDKSolenoid
 
 
 def main() -> None:
-    solenoid = LED(hensuu.solenoid_pin)
+    solenoid = RDKSolenoid(hensuu.solenoid_pin)
     controller = PygameDualSense.open()
     was_pressed = False
     print("L2: ソレノイド  /  OPTIONS: 終了")
@@ -25,7 +25,7 @@ def main() -> None:
             was_pressed = pressed
             time.sleep(0.02)
     finally:
-        solenoid.off()
+        solenoid.close()
         controller.close()
 
 
