@@ -18,18 +18,12 @@ try:
     servos.home_from_feedback()
     servos.start_pid()  # PID保持を自動で開始する
 
-    print("○: 持ち上げ  /  OPTIONS: 終了")
-
     while True:
         state = controller.read()
 
-        if state.button(Button.OPTIONS):
-            break
-
             # 初期位置へ
-            servos.lift.write(0)
-            
-            time.sleep(2.0)
+        servos.lift.write(100)
+        time.sleep(2.0)
 
 
         time.sleep(0.02)
