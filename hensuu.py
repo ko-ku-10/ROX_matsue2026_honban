@@ -14,7 +14,7 @@ catch_min_angle = -360
 catch_max_angle = 360
 # 90度を15%で測定した値を基準に、実際は7.5%でゆっくり動かす。
 catch_calibration_speed_percent = 7.5
-catch_move_speed_percent = 7.5
+catch_move_speed_percent = 10
 catch_90deg_time_sec = 0.124       # 実測値。90度に掛かった時間
 catch_direction = 1                # 角度を増やして逆へ動く場合は -1
 catch_brake_time_sec = 0.08        # 停止前に減速する時間。反動が残るなら増やす
@@ -25,7 +25,7 @@ lift_can_id = 6
 lift_min_angle = -360
 lift_max_angle = 360
 lift_calibration_speed_percent = 15.0
-lift_move_speed_percent = 7.5
+lift_move_speed_percent = 10
 lift_90deg_time_sec = 0.124
 lift_direction = 1
 lift_brake_time_sec = 0.08

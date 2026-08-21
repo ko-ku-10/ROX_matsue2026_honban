@@ -27,29 +27,29 @@ try:
                 servos.catch.write(0)
                 servos.lift.write(105)
                 print("下に移動")
-                while servos.lift.read() >= 105
+                time.sleep(3.0)
                 basyo = "下"
             
             elif basyo == "下":
                 servos.catch.write(0)
                 servos.lift.write(0)
                 print("原点に移動")
-                while servos.lift.read() >= 0
+                time.sleep(3.0)
                 basyo = "原点"
                 
         if state.buttons[Button.TRIANGLE]:
             print("掴みます")
             servos.lift.write(105)
-            while servos.lift.read() >= 105
-
+            time.sleep(3.0)
+            
             servos.catch.write(-70)
-            while servos.catch.read() <= -30
+            time.sleep(2.0)
 
             servos.lift.write(0)
-            while servos.lift.read() >= 0
+            time.sleep(3.0)
 
             servos.catch.write(0)
-            while servos.catch.read() <= 0
+            time.sleep(2.0)
 
 
 
