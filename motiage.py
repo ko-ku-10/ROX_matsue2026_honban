@@ -25,7 +25,7 @@ try:
         if state.buttons[Button.CREATE]:
             if basyo == "原点":
                 servos.catch.write(0)
-                servos.lift.write(105)
+                servos.lift.write(110)
                 print("下に移動")
                 time.sleep(3.0)
                 basyo = "下"
@@ -39,7 +39,7 @@ try:
                 
         if state.buttons[Button.TRIANGLE]:
             print("掴みます")
-            servos.lift.write(105)
+            servos.lift.write(110)
             time.sleep(3.0)
             
             servos.catch.write(-70)
