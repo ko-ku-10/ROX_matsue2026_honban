@@ -11,16 +11,13 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import hensuu
 from gpiozero import LED
 from rox_mecanum import (
-    ATEncoderReader,
     AT_NEUTRAL_VALUE,
     Button,
     DualSenseMotionMapping,
-    EncoderFeedback,
     MecanumMixer,
     MecanumRobot,
     PySerialTransport,
     PygameDualSense,
-    at_address_from_can_id,
 )
 from servos import open_servos
 
@@ -69,27 +66,13 @@ def _start_dashboard(status: RobotStatus, port: int) -> ThreadingHTTPServer:
     return server
 
 
-def _wait_for_home(reader: ATEncoderReader, addresses: dict[str, int]) -> dict[str, EncoderFeedback]:
-    deadline = time.monotonic() + 5.0
-    values: dict[str, EncoderFeedback] = {}
-    while time.monotonic() < deadline and set(values) != set(addresses):
-        reader.request_all()
-        time.sleep(0.02)
-        for feedback in reader.poll():
-            values[feedback.name] = feedback
-    missing = set(addresses) - set(values)
-    if missing:
-        raise TimeoutError(f"エンコーダー応答なし: {', '.join(sorted(missing))}")
-    return values
-
-
 def main() -> None:
     status = RobotStatus()
     server = _start_dashboard(status, hensuu.dashboard_port)
     host = socket.gethostbyname(socket.gethostname())
     print(f"状態表示: http://{host}:{hensuu.dashboard_port}")
     print("操作: 左スティック=移動 / R2+右スティック=旋回 / L2=ソレノイド")
-    print("○=catch最大 / ×=catch原点 / △=lift最大 / □=lift原点 / OPTIONS=非常停止")
+    print("CREATE=lift上下切替 / △=持ち上げ動作 / ○=catch閉 / ×=catch開 / OPTIONS=非常停止")
 
     controller = None
     transport = None
@@ -107,27 +90,22 @@ def main() -> None:
             mixer=MecanumMixer(rotation_gain=0.22),
             speed_span=_speed_span(hensuu.mecanum_speed_percent),
         )
-        catch_address = at_address_from_can_id(hensuu.catch_can_id)
-        lift_address = at_address_from_can_id(hensuu.lift_can_id)
-        addresses = {"FL": 0x0C, "FR": 0x14, "RL": 0x1C, "RR": 0x24, "catch": catch_address, "lift": lift_address}
-        reader = ATEncoderReader(transport, addresses)
-        servos = open_servos(transport=transport, reader=reader)
+        # サーボは専用の角度読取りを使う。メカナムと通信ポートは共有する。
+        servos = open_servos(transport=transport)
         catch, lift = servos.catch, servos.lift
         mecanum.enable_all(retries=3, interval=0.05)
         servos.attach()
 
         input("catch/liftを機械的な0度へ合わせてから Enter: ")
-        homes = _wait_for_home(reader, {"catch": catch_address, "lift": lift_address})
-        servos.home_feedbacks(homes)
+        servos.home_from_feedback()
+        servos.start_pid()
         mapping = DualSenseMotionMapping(deadzone=0.08, rotation_enable=Button.R2 if hensuu.mecanum_rotation_requires_r2 else None)
         control_interval = 1.0 / 50.0
-        next_query_at = 0.0
         next_drive_at = 0.0
         solenoid_until = 0.0
-        latest_positions: dict[str, float | int | None] = {
-            name: feedback.position_rad if feedback.position_rad is not None else feedback.count
-            for name, feedback in homes.items()
-        }
+        lift_is_down = False
+        action = "idle"
+        action_started = 0.0
         status.set(message="運転中", dashboard_url=f"http://{host}:{hensuu.dashboard_port}")
 
         while True:
@@ -151,10 +129,27 @@ def main() -> None:
                 catch.write(hensuu.catch_max_angle)
             if state.was_pressed(Button.CROSS):
                 catch.write(0.0)
-            if state.was_pressed(Button.TRIANGLE):
-                lift.write(hensuu.lift_max_angle)
-            if state.was_pressed(Button.SQUARE):
+            if state.was_pressed(Button.CREATE) and action == "idle":
+                # motiage.pyの「上下切替」。現在の安全範囲内で動かす。
+                if lift_is_down:
+                    lift.write(0.0)
+                    lift_is_down = False
+                    print("lift: 原点へ")
+                else:
+                    lift.write(hensuu.lift_min_angle)
+                    lift_is_down = True
+                    print("lift: 下へ")
+            if state.was_pressed(Button.SQUARE) and action == "idle":
                 lift.write(0.0)
+                lift_is_down = False
+            if state.was_pressed(Button.TRIANGLE) and action == "idle":
+                # motiage.pyの「掴む」順番を、sleepで止めずに実行する。
+                # 各段階は実測角度が目標に着くまで待つ。
+                lift.write(hensuu.lift_min_angle)
+                lift_is_down = True
+                action = "lower"
+                action_started = started
+                print("持ち上げ動作: liftを下げます")
             if state.was_pressed(Button.L2):
                 solenoid.on()
                 solenoid_until = started + hensuu.solenoid_time_sec
@@ -162,27 +157,37 @@ def main() -> None:
                 solenoid.off()
                 solenoid_until = 0.0
 
-            if started >= next_query_at:
-                reader.request_all()
-                next_query_at = started + 1.0 / hensuu.encoder_poll_hz
-            for feedback in reader.poll(started):
-                latest_positions[feedback.name] = feedback.position_rad if feedback.position_rad is not None else feedback.count
-                if feedback.name == "catch":
-                    catch.update_feedback(feedback)
-                elif feedback.name == "lift":
-                    lift.update_feedback(feedback)
-
-            # エンコーダー通信が途切れたら、最後の補正速度を残さず停止する。
-            if catch.last_feedback_at is not None and started - catch.last_feedback_at > 0.20:
-                catch.stop()
-            if lift.last_feedback_at is not None and started - lift.last_feedback_at > 0.20:
-                lift.stop()
+            # 非ブロッキングの持ち上げシーケンス。OPTIONSは常に即座に受け付ける。
+            if action == "lower" and lift.is_at_target():
+                catch.write(hensuu.catch_max_angle)
+                action = "close"
+                action_started = started
+                print("持ち上げ動作: catchを閉じます")
+            elif action == "close" and catch.is_at_target():
+                lift.write(0.0)
+                lift_is_down = False
+                action = "raise"
+                action_started = started
+                print("持ち上げ動作: liftを上げます")
+            elif action == "raise" and lift.is_at_target():
+                catch.write(0.0)
+                action = "open"
+                action_started = started
+                print("持ち上げ動作: catchを開きます")
+            elif action == "open" and catch.is_at_target():
+                action = "idle"
+                print("持ち上げ動作: 完了")
+            elif action != "idle" and started - action_started > 15.0:
+                # 物理的に動けない時に永遠に待たない。PIDも解除して安全停止する。
+                print("持ち上げ動作: 15秒で時間切れ。サーボを停止します")
+                servos.release()
+                action = "idle"
 
             status.set(
-                encoder_positions=latest_positions,
                 catch=catch.status(),
                 lift=lift.status(),
                 solenoid=bool(solenoid_until),
+                mechanism_action=action,
                 active_buttons=[button.value for button in state.active_buttons],
             )
             remaining = control_interval - (time.monotonic() - started)
