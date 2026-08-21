@@ -1,271 +1,132 @@
-# ROX ロボット制御ライブラリ
+# ROX2026 ロボットプログラム
 
-メカナム、DualSense、ATシリアル通信、エンコーダー付き位置サーボをPythonから扱うライブラリです。プログラミング時はこのREADMEを関数・ボタン名の早見表として使ってください。
+このリポジトリは、ROX2026用のメカナムロボットをPythonで操作するためのコードです。ゲームごとの実行プログラムは分け、共通の難しい処理は `rox_mecanum` ライブラリへまとめています。
 
-## 本番の起動
+## 最初に使うプログラム
 
-メカナム、catch/lift、ソレノイド、状態表示サイトをまとめて起動します。
+同じ `/dev/ttyUSB0` を使うため、次のプログラムは**同時に1つだけ**起動します。
+
+| 目的 | 実行コマンド |
+|---|---|
+| GAME1 | `python3 game1.py` |
+| GAME2 | `python3 game2.py` |
+| カメラ・Tagだけ確認 | `python3 maintenance.py --camera-only` |
+| カメラ・Tag・モーターを部分確認 | `python3 maintenance.py` |
+| 従来の手動統合操作 | `python3 run_all.py` |
+
+初回の必要パッケージです。
 
 ```bash
-cd ~/Desktop/honban/ROX_matsue2026_honban
-python3 run_all.py
+python3 -m pip install --user '.[hardware,vision]'
 ```
 
-起動時にcatch/liftを機械的な原点へ合わせ、Enterを押します。状態サイトは次で開けます。
-
-```text
-http://ロボットのIPアドレス:8000
-```
-
-個別の `mecanum.py`、`servos.py`、`sorenoido.py` は動作確認用です。同じ `/dev/ttyUSB0` を使うため、`run_all.py` と同時に起動しません。
-
-## よく使う import
-
-```python
-from rox_mecanum import (
-    Button, PygameDualSense,                 # コントローラー
-    MotionCommand, MecanumMixer, MecanumRobot, # メカナム
-    ATMotor, PySerialTransport,              # モーター通信
-    ATEncoderReader, EncoderPositionServo, PositionServoConfig, # PIDサーボ
-    at_address_from_can_id,
-)
-```
-
-## DualSense のボタン名
-
-`Button.名前` を使います。`state.button()` は押している間ずっと `True`、`state.was_pressed()` は押した瞬間だけ `True` です。
-
-| 実際のボタン | コード |
-|---|---|
-| × | `Button.CROSS` |
-| ○ | `Button.CIRCLE` |
-| □ | `Button.SQUARE` |
-| △ | `Button.TRIANGLE` |
-| L1 / R1 | `Button.L1` / `Button.R1` |
-| L2 / R2 | `Button.L2` / `Button.R2` |
-| CREATE / OPTIONS | `Button.CREATE` / `Button.OPTIONS` |
-| L3 / R3 | `Button.L3` / `Button.R3` |
-| PS / タッチパッド / MUTE | `Button.PS` / `Button.TOUCHPAD` / `Button.MUTE` |
-| 十字キー | `Button.DPAD_UP`, `DPAD_DOWN`, `DPAD_LEFT`, `DPAD_RIGHT` |
-
-```python
-controller = PygameDualSense.open()
-state = controller.read()
-
-if state.was_pressed(Button.CIRCLE):  # ○を押した瞬間に1回だけ実行
-    print("catchを閉じる")
-
-if state.button(Button.L2):           # L2を押している間ずっと実行
-    print("ソレノイドON")
-
-if state.button(Button.OPTIONS):
-    print("停止")
-```
-
-スティック値は `-1.0〜1.0` です。
-
-```python
-state.left_stick.x       # 左右。右がプラス
-state.left_stick.y       # 前後。前がプラス
-state.right_stick.x      # 右スティック左右
-state.left_stick.magnitude      # 倒し量 0.0〜1.0
-state.left_stick.angle_degrees  # 右=0°、前=90°
-state.l2, state.r2       # トリガーの倒し量 0.0〜1.0
-state.active_buttons     # 押されている全ボタン
-```
-
-## run_all.py の操作割当て
+## 共通の操作
 
 | 操作 | 機能 |
 |---|---|
-| 左スティック | 前後・左右移動 |
+| タッチパッド押し込み | 完全手動モード / 自動モード切替 |
+| 左スティック | 前後・左右への平行移動 |
 | R2 + 右スティック左右 | 旋回 |
-| L2 | ソレノイドを指定時間だけON |
-| ○ / × | catchを最大角度 / 原点へ |
-| △ / □ | liftを最大角度 / 原点へ |
-| OPTIONS | 全モーターとソレノイドを停止して終了 |
+| OPTIONS | 全停止・終了 |
 
-## メカナムをライブラリから使う
+起動直後は完全手動モードです。自動モード中でもスティック操作を足せます。タッチパッドでモードを切り替えた時は自動動作を停止し、勝手に再開しません。
 
-速度は `-1.0〜1.0` です。
+## GAME1の操作
 
-```python
-from rox_mecanum import MotionCommand, MecanumMixer
+| ボタン | 動作 |
+|---|---|
+| CREATE | lift/catchを開始姿勢へ展開して固定 |
+| △ | Tag 1または9を基準に、Tag 8へ自動移動・中心合わせ |
+| ○ | Tag 8中心合わせ後にトンネルを通過 |
+| □ | Tag 12・13の中間へ自動停止 |
+| R1 | 低速で板を押し込み |
+| × | 板へ上がれたことを操縦者が確定 |
+| L2 | Tag 6・10の間を通ってTag 0へ帰還 |
 
-mixer = MecanumMixer(rotation_gain=0.22)
-speeds = mixer.mix(MotionCommand(forward=0.5, strafe=0.2, rotate=0.0))
-print(speeds.front_left, speeds.front_right, speeds.rear_left, speeds.rear_right)
+GAME1ではCREATEで展開した後、lift/catchを動かしません。`game1_hensuu.py` に距離・時間・開始角度を入力してから自動走行を使います。
+
+## GAME2の操作
+
+| ボタン | 動作 |
+|---|---|
+| CREATE | パネル読取、前進、横スライド照準を実行 |
+| △ | 照準成功後にliftを発射高さへ上げる |
+| L2 | 発射 |
+| × | liftを下げ、後退して補給位置へ戻る |
+
+パネルはTag 14〜22で判定します。中央段、上段、下段の順に選び、同じ段に2枚以上あれば中間を狙います。調整値は `game2_hensuu.py` にあります。
+
+## カメラとAprilTag
+
+カメラ設定は `camera_hensuu.py` にあります。
+
+- Tag種類: `tag16h5`
+- Tagサイズ: 180 mm (`apriltag_size_m = 0.180`)
+- `left_camera_device` と `right_camera_device`: 左右カメラ番号
+- `camera_focal_length_px`: 校正後の焦点距離。`0.0`の間は距離を使う自動移動を完了しません。
+
+まず `maintenance.py --camera-only` を起動し、ブラウザで映像とTag番号を確認してください。画面には左右カメラ映像、Tagの中心ずれ・距離、検出状態、通信エラーが表示されます。CREATEを物理的に押した後だけ、短時間のブラウザ駆動テストも使えます。
+
+距離を使う自動移動の前に、チェスボードを使って校正します。
+
+```bash
+python3 calibrate_stereo.py
 ```
 
-短縮関数もあります。
+表示された焦点距離を `camera_hensuu.py` の `camera_focal_length_px` へ入力してください。
+
+## ライブラリを使うとき
 
 ```python
-from rox_mecanum import forward, backward, strafe_left, strafe_right, turn_left, turn_right, stop
+from rox_mecanum import Button, MotionCommand, TagStore
 
-forward(0.5)
-strafe_right(0.3)
-turn_left(0.4)
-stop()
+# メカナム移動は -1.0〜+1.0。
+command = MotionCommand(forward=0.3, strafe=-0.2, rotate=0.0)
+
+Button.CROSS       # ×
+Button.CIRCLE      # ○
+Button.SQUARE      # □
+Button.TRIANGLE    # △
+Button.CREATE      # CREATE
+Button.OPTIONS     # OPTIONS
+Button.TOUCHPAD    # タッチパッド押し込み
 ```
 
-実機へ送る場合は `MecanumRobot.drive()` を定期的に呼びます。
+| クラス・関数 | 役割 |
+|---|---|
+| `PygameDualSense` | DualSense入力を読む |
+| `MotionCommand` | 前後・横・旋回の移動指令 |
+| `MecanumRobot.drive()` | 4輪モーターへ移動指令を送る |
+| `RobotRuntime` | コントローラー・メカナム・サーボをまとめて開く |
+| `TagStore` | 古いTag検出を無視して最新値だけ使う |
+| `AprilTagDetector` | tag16h5を検出する |
+| `ModeController` | 手動/自動モードの切替 |
+| `add_manual_command()` | 自動速度とスティック速度を安全に合成する |
+| `MaintenanceSite` | メンテナンス用ブラウザ画面 |
+
+## RobStride角度サーボ
+
+catchはCAN ID 5、liftはCAN ID 6です。実測角度 `mechPos (0x7019)` を使用し、速度積分で角度を推定しません。
 
 ```python
-robot.drive(MotionCommand(forward=0.5))
-robot.stop()
-```
-
-## ATモーター通信
-
-この機体の成功した通信方式は **pyserial + `/dev/ttyUSB0` + 921600 baud** です。`python-can` や `can0` をメカナム制御には使いません。
-
-```python
-from rox_mecanum import ATMotor, PySerialTransport, at_address_from_can_id
-
-transport = PySerialTransport.open("/dev/ttyUSB0", baudrate=921600)
-motor = ATMotor(transport, at_address_from_can_id(5))  # CAN ID 5 → AT宛先 0x2C
-
-try:
-    motor.enable()
-    motor.set_velocity(0.10)  # 正方向10%
-finally:
-    motor.stop()
-    transport.close()
-```
-
-### CAN ID とAT宛先
-
-`at_address_from_can_id(can_id)` を必ず使います。自分で `0x2C` などを計算する必要はありません。
-
-| CAN ID | AT宛先 |
-|---:|---:|
-| 1 | `0x0C` |
-| 2 | `0x14` |
-| 3 | `0x1C` |
-| 4 | `0x24` |
-| 5（catch） | `0x2C` |
-| 6（lift） | `0x34` |
-
-## エンコーダー付きPID位置サーボ
-
-`EncoderPositionServo` は RobStride の実測角度 `mechPos (0x7019)` を使います。速度を積分して角度を推定しません。外力で位置がずれたときだけ、次の実測値から目標位置へ戻そうとします。
-
-```python
-from rox_mecanum import ATMotor, EncoderPositionServo, PositionServoConfig
-
-servo = EncoderPositionServo(
-    ATMotor(transport, at_address_from_can_id(5)),
-    PositionServoConfig(
-        min_angle=-30,
-        max_angle=90,
-        counts_per_degree=65536 / 360,
-        kp=0.015,
-        ki=0.002,
-        max_speed=0.20,
-        tolerance_deg=0.5,
-        direction=1,
-    ),
-)
-
-servo.enable(retries=3)
-servo.set_home_radians(position_rad=5.16065)  # mechPosで読んだ現在角度を原点にする
-servo.write(45)                  # 目標角度を45°にする
-servo.read()                      # 現在角度を読む
-servo.is_at_target()              # 目標角度へ到達したか
-servo.hold_current()              # 今いる位置を新しい目標として保持
-servo.release()                   # 保持解除して停止
-
-# mechPos応答を受信するたびに呼ぶ。これが位置保持を行う。
-servo.update_radians(position_rad=5.20, now=time.monotonic())
-
-servo.stop()
-```
-
-### catch・liftをもっと短く書く
-
-この機体で使うCAN ID 5（catch）とID 6（lift）は、`hensuu.py` に設定済みです。普段は `PositionServoConfig(...)` を毎回書かず、`open_servos()` を使います。
-
-```python
-import time
 from servos import open_servos
 
 servos = open_servos()
 try:
-servos.attach()
-servos.home_from_feedback()  # 実行時の物理位置を両方とも0°として登録
-servos.start_pid()           # 以後、内部で50Hzのエンコーダー読取りを行う
-
-servos.catch.write(45)
-    servos.lift.write(90)
-    time.sleep(5)
+    servos.attach()
+    input("機械原点へ合わせてEnter: ")
+    servos.home_from_feedback()
+    servos.start_pid()
+    servos.lift.write(45)
 finally:
     servos.close()
 ```
 
-`servos.catch` と `servos.lift` はどちらも同じ関数を使えます。
-
-```python
-servos.catch.write(30)
-servos.lift.hold_current()
-servos.catch.release()
-```
-
-### 今の位置で固定する
-
-次は起動時の位置をそのまま保持します。`home_from_feedback()` だけではPIDは動きません。`hold_all_current()` を明示的に呼ぶので、開始時の誤差は0°であり、勝手に別の位置へ動くことはありません。
-
-```bash
-python3 hold_current.py
-```
-
-`OPTIONS` でPID解除・停止して終了します。CAN/USB応答が `servo_feedback_timeout_sec`（初期値0.25秒）途切れた場合も、前回の速度を出し続けず停止します。
-
-PIDをモーターごとに切り替えることもできます。
-
-```python
-servos.catch.pid_off()   # catchだけ重力に任せる
-servos.lift.pid_on()     # liftだけPID保持をオン
-
-# 同じことを名前指定でも書ける
-servos.pid_off("lift")
-servos.pid_on("catch")
-```
-
-エンコーダー読取りには `ATEncoderReader` を使います。
-
-```python
-reader = ATEncoderReader(transport, {"catch": at_address_from_can_id(5)})
-reader.request_all()
-
-for feedback in reader.poll():
-    print(feedback.name, feedback.count)
-    servo.update(feedback.count, feedback.received_at)
-```
-
-## hensuu.py の主な調整値
-
-| 変数 | 意味 |
-|---|---|
-| `mecanum_speed_percent` | メカナム最高速度 |
-| `catch_min_angle`, `catch_max_angle` | catchの可動範囲（度） |
-| `lift_min_angle`, `lift_max_angle` | liftの可動範囲（度） |
-| `catch_pid_kp`, `lift_pid_kp` | 大きいほど復帰が強い。振動したら下げる |
-| `catch_pid_ki`, `lift_pid_ki` | 重力でゆっくりずれ続ける力を打ち消す。振動したら下げる |
-| `servo_max_speed_percent` | PID補正の最高速度 |
-| `servo_tolerance_deg` | この誤差以内なら停止する範囲 |
-| `servo_feedback_timeout_sec` | この時間、角度応答が来なければ安全停止する時間 |
-| `catch_direction`, `lift_direction` | 目標と逆へ動く場合は `-1` |
-| `dashboard_port` | 状態サイトのポート番号 |
-
-## RobStride 05の角度取得と安全なサーボ動作
-
-RobStrideの正式な位置値は`0x7019`の`mechPos`です。これは負荷側の多回転機械角度で、単位は`rad`（float）です。ライブラリは実測値を度へ換算して位置制御し、速度から角度を推定しません。
-
-サーボは原点を読んだだけでは動きません。`write(角度)`、`hold_current()`、または`pid_on()`を明示的に呼んだ場合だけ位置補正を開始します。正式な`mechPos`応答がないときはPID出力しません。
+PID、角度範囲、最高速度は `hensuu.py` で調整します。初回は必ず低速で、機構を安全な位置に置いて確認してください。
 
 ## 安全上の注意
 
-- PIDの初回確認は必ず機構を浮かせ、`servo_max_speed_percent` を低くして行います。
-- 角度が逆へ動いたら、すぐ止めて `catch_direction` または `lift_direction` を `-1` にします。
-- `mechPos`はradで受信し、ライブラリ内でdegに換算しています。値を速度から積分して角度にしてはいけません。
-- `/dev/ttyUSB0` は1つのプロセスだけが開きます。`run_all.py` を使うときは個別プログラムを終了します。
+- 自動の距離・時間設定が未調整なら、値を `0.0` のままにして動かさないでください。
+- Tagやカメラを見失った時は、次段階へ進めず手動で位置を直します。
+- ブラウザの駆動テストは周囲を確認してから、物理CREATEを押して短時間だけ有効化します。
+- OPTIONSと実機の非常停止を常に使える状態にしてください。

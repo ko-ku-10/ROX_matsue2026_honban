@@ -39,6 +39,10 @@ from .serial_at import (
 )
 from .timed_servo import TimedServo, TimedServoConfig
 from .feedback_servo import ATEncoderReader, EncoderFeedback, EncoderPositionServo, PositionServoConfig
+from .autonomy import ControlMode, ModeController, TimedMotion, add_manual_command
+from .vision import AprilTagDetector, OpenCVStereoCamera, TagObservation, TagStore, midpoint
+from .runtime import RobotRuntime
+from .maintenance_site import MaintenanceSite
 
 __all__ = [
     "AT_NEUTRAL_VALUE",
@@ -75,4 +79,15 @@ __all__ = [
     "strafe_right",
     "turn_left",
     "turn_right",
+    "ControlMode",
+    "ModeController",
+    "TimedMotion",
+    "add_manual_command",
+    "AprilTagDetector",
+    "OpenCVStereoCamera",
+    "TagObservation",
+    "TagStore",
+    "midpoint",
+    "RobotRuntime",
+    "MaintenanceSite",
 ]

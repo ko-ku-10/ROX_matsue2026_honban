@@ -1,0 +1,37 @@
+from __future__ import annotations
+
+from rox_mecanum import Button, ControlMode, ControllerState, ModeController, MotionCommand, TagObservation, TagStore, add_manual_command, midpoint
+
+
+def test_touchpad_switches_mode_only_on_press() -> None:
+    mode = ModeController()
+    assert mode.mode is ControlMode.MANUAL
+    assert mode.update(ControllerState(pressed=frozenset({Button.TOUCHPAD})))
+    assert mode.mode is ControlMode.AUTO
+    assert not mode.update(ControllerState())
+
+
+def test_manual_mode_ignores_auto_but_auto_mode_adds_it() -> None:
+    auto = MotionCommand(forward=0.4, strafe=0.2)
+    manual = MotionCommand(forward=-0.1, rotate=0.3)
+    assert add_manual_command(auto, manual, False) == manual
+    combined = add_manual_command(auto, manual, True)
+    assert round(combined.forward, 6) == 0.3
+    assert combined.strafe == 0.2
+    assert combined.rotate == 0.3
+
+
+def test_tag_store_never_returns_old_observation() -> None:
+    store = TagStore()
+    tag = TagObservation(8, 500, 200, 1000, 1.0, timestamp=10.0)
+    store.update([tag])
+    assert store.get(8, max_age_sec=0.5, now=10.2) == tag
+    assert store.get(8, max_age_sec=0.5, now=10.6) is None
+
+
+def test_pair_midpoint_is_centered() -> None:
+    first = TagObservation(12, 400, 200, 1000, 1.0, 1.0)
+    second = TagObservation(13, 600, 200, 1000, 1.2, 1.0)
+    target = midpoint(first, second)
+    assert target.horizontal_error == 0.0
+    assert target.distance_m == 1.1
