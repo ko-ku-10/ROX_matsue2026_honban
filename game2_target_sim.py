@@ -13,7 +13,7 @@ import time
 
 import camera_hensuu
 import game2_hensuu as cfg
-from rox_mecanum import AprilTagDetector, TagStore, choose_panel_target, open_stereo_camera
+from rox_mecanum import AprilTagDetector, RDKMIPICamera, TagStore, choose_panel_target
 
 
 PANEL_IDS = tuple(range(14, 23))
@@ -26,33 +26,45 @@ def _ids_in_frame(detector: AprilTagDetector, image: object) -> tuple[int, ...]:
 def main() -> None:
     print("GAME2 パネル選択シミュレーション（モーターは動きません）")
     print("左右カメラを開いています。Ctrl+Cで終了します。")
-    camera = None
+    left_camera = None
+    right_camera = None
     try:
-        camera = open_stereo_camera(
-            backend=camera_hensuu.camera_backend, left_device=camera_hensuu.left_camera_device,
-            right_device=camera_hensuu.right_camera_device, left_index=camera_hensuu.left_mipi_camera_index,
-            right_index=camera_hensuu.right_mipi_camera_index, fps=camera_hensuu.mipi_fps,
-            width=camera_hensuu.mipi_width, height=camera_hensuu.mipi_height,
+        if camera_hensuu.camera_backend != "rdk_mipi":
+            raise RuntimeError("この単体診断はRDK MIPIカメラ専用です")
+        left_camera = RDKMIPICamera(
+            camera_hensuu.left_mipi_camera_index, camera_hensuu.mipi_fps,
+            camera_hensuu.mipi_width, camera_hensuu.mipi_height,
         )
+        try:
+            right_camera = RDKMIPICamera(
+                camera_hensuu.right_mipi_camera_index, camera_hensuu.mipi_fps,
+                camera_hensuu.mipi_width, camera_hensuu.mipi_height,
+            )
+            right_status = "OK"
+        except RuntimeError as error:
+            right_status = f"未接続 ({error})"
         detector = AprilTagDetector(camera_hensuu.apriltag_size_m, camera_hensuu.camera_focal_length_px)
         tags = TagStore()
         previous: tuple[object, ...] | None = None
         last_report = 0.0
-        print("左右カメラ接続: OK")
+        print("左カメラ接続: OK")
+        print(f"右カメラ接続: {right_status}")
 
         while True:
-            left, right = camera.read()
+            left = left_camera.read()
+            right = right_camera.read() if right_camera is not None else None
             # カメラごとの認識を表示する。判定用には両方の検出Tagを渡す。
             left_ids = _ids_in_frame(detector, left)
-            right_ids = _ids_in_frame(detector, right)
+            right_ids = _ids_in_frame(detector, right) if right is not None else ()
             tags.update(detector.detect(left))
-            tags.update(detector.detect(right))
+            if right is not None:
+                tags.update(detector.detect(right))
             choice = choose_panel_target(tags, cfg.panel_rows, camera_hensuu.tag_max_age_sec)
             current = (left_ids, right_ids, choice.label if choice else "なし")
             now = time.monotonic()
             if current != previous or now - last_report >= 1.0:
                 print(f"左カメラ: {left_ids or 'パネルTagなし'}")
-                print(f"右カメラ: {right_ids or 'パネルTagなし'}")
+                print(f"右カメラ: {right_ids or ('未接続' if right is None else 'パネルTagなし')}")
                 if choice is None:
                     print("狙い: なし（Tag 14〜22をカメラへ向けてください）")
                 elif len(choice.tag_ids) == 1:
@@ -65,8 +77,10 @@ def main() -> None:
     except KeyboardInterrupt:
         print("終了します")
     finally:
-        if camera is not None:
-            camera.close()
+        if right_camera is not None:
+            right_camera.close()
+        if left_camera is not None:
+            left_camera.close()
 
 
 if __name__ == "__main__":

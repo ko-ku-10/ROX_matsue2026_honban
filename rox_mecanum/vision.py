@@ -187,6 +187,43 @@ class RDKMIPIStereoCamera:
                     pass
 
 
+class RDKMIPICamera:
+    """RDK MIPIカメラ1台だけを読むアダプター。診断用に使う。"""
+
+    def __init__(self, index: int = 0, fps: int = 30, width: int = 1920, height: int = 1080) -> None:
+        try:
+            import cv2
+            import numpy as np
+            from hobot_vio import libsrcampy
+        except ImportError as error:  # pragma: no cover - RDK実機依存
+            raise RuntimeError("RDK X5用のhobot_vioとOpenCVが必要です") from error
+        self._cv2 = cv2
+        self._np = np
+        self.width = int(width)
+        self.height = int(height)
+        self.camera = libsrcampy.Camera()
+        if self.camera.open_cam(int(index), -1, int(fps), self.width, self.height):
+            self.close()
+            raise RuntimeError(f"MIPIカメラ(index={index})を開けません")
+
+    def read(self) -> object:
+        raw = self.camera.get_img(1)
+        expected = self.width * self.height * 3 // 2
+        data = self._np.frombuffer(raw, dtype=self._np.uint8)
+        if data.size != expected:
+            raise RuntimeError(f"MIPIカメラ画像のサイズが不正です: {data.size} bytes (期待 {expected})")
+        nv12 = data.reshape((self.height * 3 // 2, self.width))
+        return self._cv2.cvtColor(nv12, self._cv2.COLOR_YUV2BGR_NV12)
+
+    def close(self) -> None:
+        camera = getattr(self, "camera", None)
+        if camera is not None:
+            try:
+                camera.close_cam()
+            except Exception:
+                pass
+
+
 def open_stereo_camera(
     *,
     backend: str,
