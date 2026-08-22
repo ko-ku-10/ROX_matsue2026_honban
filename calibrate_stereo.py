@@ -28,8 +28,9 @@ def main() -> None:
 
     camera = open_stereo_camera(
         backend=camera_hensuu.camera_backend, left_device=camera_hensuu.left_camera_device,
-        right_device=camera_hensuu.right_camera_device, left_index=camera_hensuu.left_mipi_camera_index,
-        right_index=camera_hensuu.right_mipi_camera_index, fps=camera_hensuu.mipi_fps,
+        right_device=camera_hensuu.right_camera_device, left_pipe_id=camera_hensuu.left_mipi_pipe_id,
+        left_host_index=camera_hensuu.left_mipi_host_index, right_pipe_id=camera_hensuu.right_mipi_pipe_id,
+        right_host_index=camera_hensuu.right_mipi_host_index, fps=camera_hensuu.mipi_fps,
         width=camera_hensuu.mipi_width, height=camera_hensuu.mipi_height,
     )
     object_template = np.zeros((CHESSBOARD_CORNERS[0] * CHESSBOARD_CORNERS[1], 3), np.float32)

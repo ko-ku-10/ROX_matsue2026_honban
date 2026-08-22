@@ -9,8 +9,13 @@
 camera_backend = "rdk_mipi"
 left_camera_device = 0
 right_camera_device = 1
-left_mipi_camera_index = 0
-right_mipi_camera_index = 1
+# RDK X5の ``open_cam(pipe_id, video_index, ...)`` 用の値。
+# pipe はライブラリ内で使う処理レーン。host=-1 はRDKに接続済みセンサーを
+# 自動選択させる安全な既定値。物理MIPI番号をここへ書かないこと。
+left_mipi_pipe_id = 0
+left_mipi_host_index = -1
+right_mipi_pipe_id = 1
+right_mipi_host_index = -1
 mipi_fps = 30
 mipi_width = 1920
 mipi_height = 1080

@@ -140,8 +140,10 @@ class RDKMIPIStereoCamera:
 
     def __init__(
         self,
-        left_index: int = 0,
-        right_index: int = 1,
+        left_pipe_id: int = 0,
+        left_host_index: int = -1,
+        right_pipe_id: int = 1,
+        right_host_index: int = -1,
         fps: int = 30,
         width: int = 1920,
         height: int = 1080,
@@ -159,10 +161,10 @@ class RDKMIPIStereoCamera:
         self.left = libsrcampy.Camera()
         self.right = libsrcampy.Camera()
         try:
-            if self.left.open_cam(int(left_index), -1, int(fps), self.width, self.height):
-                raise RuntimeError(f"左MIPIカメラ(index={left_index})を開けません")
-            if self.right.open_cam(int(right_index), -1, int(fps), self.width, self.height):
-                raise RuntimeError(f"右MIPIカメラ(index={right_index})を開けません")
+            if self.left.open_cam(int(left_pipe_id), int(left_host_index), int(fps), self.width, self.height):
+                raise RuntimeError(f"左MIPIカメラ(pipe={left_pipe_id}, host={left_host_index})を開けません")
+            if self.right.open_cam(int(right_pipe_id), int(right_host_index), int(fps), self.width, self.height):
+                raise RuntimeError(f"右MIPIカメラ(pipe={right_pipe_id}, host={right_host_index})を開けません")
         except Exception:
             self.close()
             raise
@@ -190,7 +192,7 @@ class RDKMIPIStereoCamera:
 class RDKMIPICamera:
     """RDK MIPIカメラ1台だけを読むアダプター。診断用に使う。"""
 
-    def __init__(self, index: int = 0, fps: int = 30, width: int = 1920, height: int = 1080) -> None:
+    def __init__(self, pipe_id: int = 0, host_index: int = -1, fps: int = 30, width: int = 1920, height: int = 1080) -> None:
         try:
             import cv2
             import numpy as np
@@ -202,9 +204,9 @@ class RDKMIPICamera:
         self.width = int(width)
         self.height = int(height)
         self.camera = libsrcampy.Camera()
-        if self.camera.open_cam(int(index), -1, int(fps), self.width, self.height):
+        if self.camera.open_cam(int(pipe_id), int(host_index), int(fps), self.width, self.height):
             self.close()
-            raise RuntimeError(f"MIPIカメラ(index={index})を開けません")
+            raise RuntimeError(f"MIPIカメラ(pipe={pipe_id}, host={host_index})を開けません")
 
     def read(self) -> object:
         raw = self.camera.get_img(1)
@@ -229,15 +231,19 @@ def open_stereo_camera(
     backend: str,
     left_device: int | str = 0,
     right_device: int | str = 1,
-    left_index: int = 0,
-    right_index: int = 1,
+    left_pipe_id: int = 0,
+    left_host_index: int = -1,
+    right_pipe_id: int = 1,
+    right_host_index: int = -1,
     fps: int = 30,
     width: int = 1920,
     height: int = 1080,
 ) -> OpenCVStereoCamera | RDKMIPIStereoCamera:
     """設定値に従ってV4L2またはRDK MIPIのステレオカメラを開く。"""
     if backend == "rdk_mipi":
-        return RDKMIPIStereoCamera(left_index, right_index, fps, width, height)
+        return RDKMIPIStereoCamera(
+            left_pipe_id, left_host_index, right_pipe_id, right_host_index, fps, width, height,
+        )
     if backend == "v4l2":
         return OpenCVStereoCamera(left_device, right_device)
     raise ValueError("camera_backend は 'rdk_mipi' または 'v4l2' にしてください")

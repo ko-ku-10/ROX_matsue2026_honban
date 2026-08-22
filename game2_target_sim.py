@@ -32,12 +32,12 @@ def main() -> None:
         if camera_hensuu.camera_backend != "rdk_mipi":
             raise RuntimeError("この単体診断はRDK MIPIカメラ専用です")
         left_camera = RDKMIPICamera(
-            camera_hensuu.left_mipi_camera_index, camera_hensuu.mipi_fps,
+            camera_hensuu.left_mipi_pipe_id, camera_hensuu.left_mipi_host_index, camera_hensuu.mipi_fps,
             camera_hensuu.mipi_width, camera_hensuu.mipi_height,
         )
         try:
             right_camera = RDKMIPICamera(
-                camera_hensuu.right_mipi_camera_index, camera_hensuu.mipi_fps,
+                camera_hensuu.right_mipi_pipe_id, camera_hensuu.right_mipi_host_index, camera_hensuu.mipi_fps,
                 camera_hensuu.mipi_width, camera_hensuu.mipi_height,
             )
             right_status = "OK"
