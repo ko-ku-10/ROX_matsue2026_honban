@@ -43,6 +43,7 @@ from .autonomy import ControlMode, ModeController, TimedMotion, add_manual_comma
 from .vision import AprilTagDetector, OpenCVStereoCamera, TagObservation, TagStore, midpoint
 from .runtime import RobotRuntime
 from .maintenance_site import MaintenanceSite
+from .targeting import PanelTarget, choose_panel_target
 
 __all__ = [
     "AT_NEUTRAL_VALUE",
@@ -90,4 +91,6 @@ __all__ = [
     "midpoint",
     "RobotRuntime",
     "MaintenanceSite",
+    "PanelTarget",
+    "choose_panel_target",
 ]

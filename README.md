@@ -10,6 +10,7 @@
 |---|---|
 | GAME1 | `python3 game1.py` |
 | GAME2 | `python3 game2.py` |
+| GAME2のパネル選択だけ確認 | `python3 game2_target_sim.py` |
 | カメラ・Tagだけ確認 | `python3 maintenance.py --camera-only` |
 | カメラ・Tag・モーターを部分確認 | `python3 maintenance.py` |
 | 従来の手動統合操作 | `python3 run_all.py` |

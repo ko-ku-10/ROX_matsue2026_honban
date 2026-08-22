@@ -18,6 +18,7 @@ from rox_mecanum import (
     TagStore,
     TimedMotion,
     add_manual_command,
+    choose_panel_target,
     midpoint,
 )
 
@@ -33,16 +34,6 @@ class Stage(str, Enum):
     LOWERING = "liftを下げ中"
     RETREAT = "補給地点へ後退中"
     FAULT = "自動停止"
-
-
-def _choose_target(tags: TagStore) -> tuple[int, ...] | None:
-    """中央→上→下。同じ行なら2枚の中央寄りを選ぶ。"""
-    for row in ("middle", "top", "bottom"):
-        visible = [tag_id for tag_id in cfg.panel_rows[row] if tags.get(tag_id, camera_hensuu.tag_max_age_sec)]
-        if visible:
-            # 2枚以上なら左右端の中間を狙い、2枚同時に倒す可能性を作る。
-            return (visible[0], visible[-1]) if len(visible) >= 2 else (visible[0],)
-    return None
 
 
 class Game2Auto:
@@ -127,8 +118,9 @@ def main() -> None:
             auto = MotionCommand.stop()
             if mode.auto_enabled:
                 if game.stage is Stage.WAIT_BALL and state.was_pressed(Button.CREATE):
-                    game.target_ids = _choose_target(tags)
-                    if game.target_ids is None:
+                    choice = choose_panel_target(tags, cfg.panel_rows, camera_hensuu.tag_max_age_sec)
+                    game.target_ids = choice.tag_ids if choice else None
+                    if choice is None:
                         game.enter(Stage.FAULT)
                         game.error = "Tag14〜22が見えません。パネルへ向けてください"
                     else:
