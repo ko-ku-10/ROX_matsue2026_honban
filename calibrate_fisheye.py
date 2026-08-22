@@ -81,16 +81,16 @@ def main() -> None:
     # RDK搭載版の古いOpenCVでは定数名を公開しない場合がある。
     # OpenCV fisheye APIで共通のビット値を予備値として使う。
     recompute_extrinsic = getattr(cv2.fisheye, "CALIB_RECOMPUTE_EXTRINSIC", 2)
-    check_condition = getattr(cv2.fisheye, "CALIB_CHECK_COND", 4)
     fix_skew = getattr(cv2.fisheye, "CALIB_FIX_SKEW", 8)
-    flags = recompute_extrinsic | check_condition | fix_skew
+    # 4隅だけのAprilTagでは CALIB_CHECK_COND が過敏に失敗するため使わない。
+    flags = recompute_extrinsic | fix_skew
     try:
         error, matrix, distortion, _rvecs, _tvecs = cv2.fisheye.calibrate(
             object_points, image_points, image_size, matrix, distortion,
             None, None, flags, (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 100, 1e-6),
         )
     except cv2.error as calibration_error:
-        raise RuntimeError("魚眼校正に失敗しました。チェスボードをより広い位置・角度で撮り直してください") from calibration_error
+        raise RuntimeError("魚眼校正に失敗しました。Tagを中央・四隅・近距離・遠距離・傾きで撮り直してください") from calibration_error
     np.savez(
         camera_hensuu.fisheye_calibration_file,
         camera_matrix=matrix,
