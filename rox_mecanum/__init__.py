@@ -40,7 +40,7 @@ from .serial_at import (
 from .timed_servo import TimedServo, TimedServoConfig
 from .feedback_servo import ATEncoderReader, EncoderFeedback, EncoderPositionServo, PositionServoConfig
 from .autonomy import ControlMode, ModeController, TimedMotion, add_manual_command
-from .vision import AprilTagDetector, OpenCVStereoCamera, TagObservation, TagStore, midpoint
+from .vision import AprilTagDetector, OpenCVStereoCamera, RDKMIPIStereoCamera, TagObservation, TagStore, midpoint, open_stereo_camera
 from .runtime import RobotRuntime
 from .maintenance_site import MaintenanceSite
 from .targeting import PanelTarget, choose_panel_target
@@ -86,6 +86,8 @@ __all__ = [
     "add_manual_command",
     "AprilTagDetector",
     "OpenCVStereoCamera",
+    "RDKMIPIStereoCamera",
+    "open_stereo_camera",
     "TagObservation",
     "TagStore",
     "midpoint",

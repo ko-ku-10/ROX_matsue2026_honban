@@ -13,7 +13,7 @@ from __future__ import annotations
 import numpy as np
 
 import camera_hensuu
-from rox_mecanum import OpenCVStereoCamera
+from rox_mecanum import open_stereo_camera
 
 
 # チェスボードの「内側の角」の数。使う実物に合わせて変更する。
@@ -26,7 +26,12 @@ REQUIRED_SAMPLES = 20
 def main() -> None:
     import cv2
 
-    camera = OpenCVStereoCamera(camera_hensuu.left_camera_device, camera_hensuu.right_camera_device)
+    camera = open_stereo_camera(
+        backend=camera_hensuu.camera_backend, left_device=camera_hensuu.left_camera_device,
+        right_device=camera_hensuu.right_camera_device, left_index=camera_hensuu.left_mipi_camera_index,
+        right_index=camera_hensuu.right_mipi_camera_index, fps=camera_hensuu.mipi_fps,
+        width=camera_hensuu.mipi_width, height=camera_hensuu.mipi_height,
+    )
     object_template = np.zeros((CHESSBOARD_CORNERS[0] * CHESSBOARD_CORNERS[1], 3), np.float32)
     object_template[:, :2] = np.mgrid[0:CHESSBOARD_CORNERS[0], 0:CHESSBOARD_CORNERS[1]].T.reshape(-1, 2)
     object_template *= SQUARE_SIZE_M

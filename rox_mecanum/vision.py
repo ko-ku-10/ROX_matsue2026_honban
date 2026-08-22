@@ -131,6 +131,81 @@ class OpenCVStereoCamera:
                 capture.release()
 
 
+class RDKMIPIStereoCamera:
+    """RDK X5の ``hobot_vio.libsrcampy`` を使うMIPIステレオカメラ。
+
+    RDK公式サンプルの ``libsrcampy.Camera().open_cam()`` と同じ方式。
+    MIPIカメラは通常 ``/dev/video*`` を作らないため、このクラスを使う。
+    """
+
+    def __init__(
+        self,
+        left_index: int = 0,
+        right_index: int = 1,
+        fps: int = 30,
+        width: int = 1920,
+        height: int = 1080,
+    ) -> None:
+        try:
+            import cv2
+            import numpy as np
+            from hobot_vio import libsrcampy
+        except ImportError as error:  # pragma: no cover - RDK実機依存
+            raise RuntimeError("RDK X5用のhobot_vioとOpenCVが必要です") from error
+        self._cv2 = cv2
+        self._np = np
+        self.width = int(width)
+        self.height = int(height)
+        self.left = libsrcampy.Camera()
+        self.right = libsrcampy.Camera()
+        try:
+            if self.left.open_cam(int(left_index), -1, int(fps), self.width, self.height):
+                raise RuntimeError(f"左MIPIカメラ(index={left_index})を開けません")
+            if self.right.open_cam(int(right_index), -1, int(fps), self.width, self.height):
+                raise RuntimeError(f"右MIPIカメラ(index={right_index})を開けません")
+        except Exception:
+            self.close()
+            raise
+
+    def read(self) -> tuple[object, object]:
+        return self._to_bgr(self.left.get_img(1), "左"), self._to_bgr(self.right.get_img(1), "右")
+
+    def _to_bgr(self, raw: object, name: str) -> object:
+        expected = self.width * self.height * 3 // 2
+        data = self._np.frombuffer(raw, dtype=self._np.uint8)
+        if data.size != expected:
+            raise RuntimeError(f"{name}MIPIカメラ画像のサイズが不正です: {data.size} bytes (期待 {expected})")
+        nv12 = data.reshape((self.height * 3 // 2, self.width))
+        return self._cv2.cvtColor(nv12, self._cv2.COLOR_YUV2BGR_NV12)
+
+    def close(self) -> None:
+        for camera in (getattr(self, "left", None), getattr(self, "right", None)):
+            if camera is not None:
+                try:
+                    camera.close_cam()
+                except Exception:
+                    pass
+
+
+def open_stereo_camera(
+    *,
+    backend: str,
+    left_device: int | str = 0,
+    right_device: int | str = 1,
+    left_index: int = 0,
+    right_index: int = 1,
+    fps: int = 30,
+    width: int = 1920,
+    height: int = 1080,
+) -> OpenCVStereoCamera | RDKMIPIStereoCamera:
+    """設定値に従ってV4L2またはRDK MIPIのステレオカメラを開く。"""
+    if backend == "rdk_mipi":
+        return RDKMIPIStereoCamera(left_index, right_index, fps, width, height)
+    if backend == "v4l2":
+        return OpenCVStereoCamera(left_device, right_device)
+    raise ValueError("camera_backend は 'rdk_mipi' または 'v4l2' にしてください")
+
+
 def midpoint(first: TagObservation, second: TagObservation) -> TagObservation:
     """2枚のTagの中間を、中心合わせ用の仮想Tagとして返す。"""
     distance_values = [value for value in (first.distance_m, second.distance_m) if value is not None]

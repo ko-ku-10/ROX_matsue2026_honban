@@ -13,7 +13,7 @@ import time
 
 import camera_hensuu
 import game2_hensuu as cfg
-from rox_mecanum import AprilTagDetector, OpenCVStereoCamera, TagStore, choose_panel_target
+from rox_mecanum import AprilTagDetector, TagStore, choose_panel_target, open_stereo_camera
 
 
 PANEL_IDS = tuple(range(14, 23))
@@ -28,7 +28,12 @@ def main() -> None:
     print("左右カメラを開いています。Ctrl+Cで終了します。")
     camera = None
     try:
-        camera = OpenCVStereoCamera(camera_hensuu.left_camera_device, camera_hensuu.right_camera_device)
+        camera = open_stereo_camera(
+            backend=camera_hensuu.camera_backend, left_device=camera_hensuu.left_camera_device,
+            right_device=camera_hensuu.right_camera_device, left_index=camera_hensuu.left_mipi_camera_index,
+            right_index=camera_hensuu.right_mipi_camera_index, fps=camera_hensuu.mipi_fps,
+            width=camera_hensuu.mipi_width, height=camera_hensuu.mipi_height,
+        )
         detector = AprilTagDetector(camera_hensuu.apriltag_size_m, camera_hensuu.camera_focal_length_px)
         tags = TagStore()
         previous: tuple[object, ...] | None = None

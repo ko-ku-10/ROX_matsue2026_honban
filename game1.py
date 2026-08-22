@@ -17,7 +17,7 @@ from rox_mecanum import (
     ControlMode,
     ModeController,
     MotionCommand,
-    OpenCVStereoCamera,
+    open_stereo_camera,
     RobotRuntime,
     TagObservation,
     TagStore,
@@ -103,7 +103,7 @@ class Game1Auto:
         )
 
 
-def _read_tags(camera: OpenCVStereoCamera, detector: AprilTagDetector, store: TagStore) -> str | None:
+def _read_tags(camera: object, detector: AprilTagDetector, store: TagStore) -> str | None:
     try:
         left, _right = camera.read()
         store.update(detector.detect(left))
@@ -118,7 +118,12 @@ def main() -> None:
     camera = None
     try:
         runtime = RobotRuntime.open(with_solenoid=False)
-        camera = OpenCVStereoCamera(camera_hensuu.left_camera_device, camera_hensuu.right_camera_device)
+        camera = open_stereo_camera(
+            backend=camera_hensuu.camera_backend, left_device=camera_hensuu.left_camera_device,
+            right_device=camera_hensuu.right_camera_device, left_index=camera_hensuu.left_mipi_camera_index,
+            right_index=camera_hensuu.right_mipi_camera_index, fps=camera_hensuu.mipi_fps,
+            width=camera_hensuu.mipi_width, height=camera_hensuu.mipi_height,
+        )
         detector = AprilTagDetector(camera_hensuu.apriltag_size_m, camera_hensuu.camera_focal_length_px)
         tags = TagStore()
         mode = ModeController()
