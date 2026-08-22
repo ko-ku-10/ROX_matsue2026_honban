@@ -78,7 +78,12 @@ def main() -> None:
         raise RuntimeError(f"Tag {TAG_ID} を認識できませんでした。Tag種類・明るさ・印刷サイズを確認してください")
     matrix = np.zeros((3, 3))
     distortion = np.zeros((4, 1))
-    flags = cv2.fisheye.CALIB_RECOMPUTE_EXTRINSIC | cv2.fisheye.CALIB_CHECK_COND | cv2.fisheye.CALIB_FIX_SKEW
+    # RDK搭載版の古いOpenCVでは定数名を公開しない場合がある。
+    # OpenCV fisheye APIで共通のビット値を予備値として使う。
+    recompute_extrinsic = getattr(cv2.fisheye, "CALIB_RECOMPUTE_EXTRINSIC", 2)
+    check_condition = getattr(cv2.fisheye, "CALIB_CHECK_COND", 4)
+    fix_skew = getattr(cv2.fisheye, "CALIB_FIX_SKEW", 8)
+    flags = recompute_extrinsic | check_condition | fix_skew
     try:
         error, matrix, distortion, _rvecs, _tvecs = cv2.fisheye.calibrate(
             object_points, image_points, image_size, matrix, distortion,
