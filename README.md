@@ -13,6 +13,7 @@
 | GAME2のパネル選択だけ確認 | `python3 game2_target_sim.py` |
 | カメラ・Tagだけ確認 | `python3 maintenance.py --camera-only` |
 | 単眼カメラの距離校正 | `python3 calibrate_camera.py 1.00` |
+| 魚眼カメラの歪み校正 | `python3 calibrate_fisheye.py` |
 | カメラ・Tag・モーターを部分確認 | `python3 maintenance.py` |
 | 従来の手動統合操作 | `python3 run_all.py` |
 
@@ -66,11 +67,18 @@ GAME1ではCREATEで展開した後、lift/catchを動かしません。`game1_h
 - Tagサイズ: 180 mm (`apriltag_size_m = 0.180`)
 - `camera_device`: USB/V4L2カメラを使う場合の番号
 - `mipi_pipe_id` と `mipi_host_index`: RDK MIPIカメラ用。既定値のまま使う
+- `fisheye_enabled`: 魚眼校正後だけ `True` にする
 - `camera_focal_length_px`: 校正後の焦点距離。`0.0`の間は距離を使う自動移動を完了しません。
 
 まず `maintenance.py --camera-only` を起動し、ブラウザで映像とTag番号を確認してください。画面にはカメラ映像、Tagの中心ずれ・距離、検出状態、通信エラーが表示されます。CREATEを物理的に押した後だけ、短時間のブラウザ駆動テストも使えます。
 
-距離を使う自動移動の前に、公式AprilTag（180 mm）をカメラの正面に置き、メジャーでTag面までの距離を測って校正します。例えば1.00 mなら次を実行します。
+魚眼カメラでは、最初に競技用の180 mm AprilTag（Tag 0で可）を画面の中央・四隅・近距離・遠距離へ動かし、左右・上下にも傾けて歪みを校正します。チェスボードは不要です。
+
+```bash
+python3 calibrate_fisheye.py
+```
+
+完了後、`camera_hensuu.py` の `fisheye_enabled = True` に変更します。補正後の映像で、距離を使う自動移動の前に、公式AprilTag（180 mm）をカメラの正面に置き、メジャーでTag面までの距離を測って校正します。例えば1.00 mなら次を実行します。
 
 ```bash
 python3 calibrate_camera.py 1.00

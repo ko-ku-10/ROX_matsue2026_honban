@@ -16,6 +16,11 @@ mipi_host_index = -1
 mipi_fps = 30
 mipi_width = 1920
 mipi_height = 1080
+# 魚眼補正。calibrate_fisheye.py 完了後に True にする。
+fisheye_enabled = False
+fisheye_calibration_file = "fisheye_calibration.npz"
+# 0.0=中央を優先して周辺を切る。1.0=周辺を最大限残す。最初は0.0が安全。
+fisheye_balance = 0.0
 apriltag_size_m = 0.180
 camera_focal_length_px = 729.30
 tag_max_age_sec = 0.35

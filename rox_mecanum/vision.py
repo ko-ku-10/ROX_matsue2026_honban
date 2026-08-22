@@ -7,6 +7,7 @@ OpenCVは実機でのみ必要。カメラが未接続のPCでも、このモジ
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from time import monotonic
 from typing import Iterable
 
@@ -252,6 +253,56 @@ class RDKMIPICamera:
                 pass
 
 
+class FisheyeUndistorter:
+    """OpenCV fisheye校正値で画像を補正する。"""
+
+    def __init__(self, calibration_file: str | Path, balance: float = 0.0) -> None:
+        try:
+            import cv2
+            import numpy as np
+        except ImportError as error:  # pragma: no cover - 実機依存
+            raise RuntimeError("魚眼補正にはOpenCVとnumpyが必要です") from error
+        path = Path(calibration_file)
+        if not path.is_file():
+            raise RuntimeError(f"魚眼校正ファイルがありません: {path}。python3 calibrate_fisheye.py を実行してください")
+        data = np.load(path)
+        self._cv2 = cv2
+        self._np = np
+        self._matrix = data["camera_matrix"]
+        self._distortion = data["distortion"]
+        self._image_size = tuple(int(value) for value in data["image_size"])
+        self._balance = max(0.0, min(1.0, float(balance)))
+        self._map: tuple[object, object] | None = None
+
+    def apply(self, image: object) -> object:
+        height, width = image.shape[:2]
+        image_size = (width, height)
+        if image_size != self._image_size:
+            raise RuntimeError(f"魚眼校正時の画像サイズ {self._image_size} と現在の画像サイズ {image_size} が違います")
+        if self._map is None:
+            new_matrix = self._cv2.fisheye.estimateNewCameraMatrixForUndistortRectify(
+                self._matrix, self._distortion, image_size, self._np.eye(3), balance=self._balance, new_size=image_size,
+            )
+            self._map = self._cv2.fisheye.initUndistortRectifyMap(
+                self._matrix, self._distortion, self._np.eye(3), new_matrix, image_size, self._cv2.CV_16SC2,
+            )
+        return self._cv2.remap(image, self._map[0], self._map[1], interpolation=self._cv2.INTER_LINEAR)
+
+
+class UndistortedCamera:
+    """任意の単眼カメラへ魚眼補正を重ねる。"""
+
+    def __init__(self, camera: object, undistorter: FisheyeUndistorter) -> None:
+        self._camera = camera
+        self._undistorter = undistorter
+
+    def read(self) -> object:
+        return self._undistorter.apply(self._camera.read())
+
+    def close(self) -> None:
+        self._camera.close()
+
+
 def open_stereo_camera(
     *,
     backend: str,
@@ -284,13 +335,23 @@ def open_camera(
     fps: int = 30,
     width: int = 1920,
     height: int = 1080,
-) -> OpenCVSingleCamera | RDKMIPICamera:
-    """設定値に従って、本番用の単眼カメラを開く。"""
+    fisheye_calibration_file: str | Path | None = None,
+    fisheye_balance: float = 0.0,
+) -> OpenCVSingleCamera | RDKMIPICamera | UndistortedCamera:
+    """設定値に従って、本番用の単眼カメラを開く。校正値があれば魚眼補正する。"""
     if backend == "rdk_mipi":
-        return RDKMIPICamera(pipe_id, host_index, fps, width, height)
-    if backend == "v4l2":
-        return OpenCVSingleCamera(device)
-    raise ValueError("camera_backend は 'rdk_mipi' または 'v4l2' にしてください")
+        camera: OpenCVSingleCamera | RDKMIPICamera = RDKMIPICamera(pipe_id, host_index, fps, width, height)
+    elif backend == "v4l2":
+        camera = OpenCVSingleCamera(device)
+    else:
+        raise ValueError("camera_backend は 'rdk_mipi' または 'v4l2' にしてください")
+    if fisheye_calibration_file is None:
+        return camera
+    try:
+        return UndistortedCamera(camera, FisheyeUndistorter(fisheye_calibration_file, fisheye_balance))
+    except Exception:
+        camera.close()
+        raise
 
 
 def midpoint(first: TagObservation, second: TagObservation) -> TagObservation:
