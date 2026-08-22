@@ -37,6 +37,7 @@ class Stage(str, Enum):
     ALIGN_TAG8 = "Tag8へ中心合わせ中"
     WAIT_PASS = "○でトンネル通過"
     PASSING = "トンネル通過中"
+    WAIT_BOARD_ALIGN = "□でTag12・13への位置合わせを開始"
     ALIGN_BOARD = "Tag12/13へ中心合わせ中"
     WAIT_PUSH = "R1で板を押す"
     PUSHING = "板を押し込み中"
@@ -164,7 +165,7 @@ def main() -> None:
                 elif game.stage is Stage.WAIT_START and state.was_pressed(Button.TRIANGLE):
                     game.stage = Stage.FIND_REFERENCE
                 elif game.stage is Stage.FIND_REFERENCE:
-                    reference = tags.get(1, camera_hensuu.tag_max_age_sec) or tags.get(9, camera_hensuu.tag_max_age_sec)
+                    reference = tags.get(cfg.tag_start_primary, camera_hensuu.tag_max_age_sec) or tags.get(cfg.tag_start_fallback, camera_hensuu.tag_max_age_sec)
                     if reference is not None:
                         if game.start_timed(MotionCommand(rotate=cfg.turn_around_speed), cfg.turn_around_sec, Stage.SLIDE):
                             game.stage = Stage.TURN
@@ -173,7 +174,7 @@ def main() -> None:
                 elif game.stage is Stage.TURN:
                     auto = game.timed_command()
                 elif game.stage is Stage.SLIDE:
-                    tag8 = tags.get(8, camera_hensuu.tag_max_age_sec)
+                    tag8 = tags.get(cfg.tag_gate, camera_hensuu.tag_max_age_sec)
                     if tag8 is not None:
                         game.motion = None
                         game.stage = Stage.ALIGN_TAG8
@@ -185,18 +186,20 @@ def main() -> None:
                         if game.stage is Stage.FAULT:
                             game.error = "Tag8を見つけられません。距離またはカメラ向きを確認してください"
                 elif game.stage is Stage.ALIGN_TAG8:
-                    tag8 = tags.get(8, camera_hensuu.tag_max_age_sec)
+                    tag8 = tags.get(cfg.tag_gate, camera_hensuu.tag_max_age_sec)
                     auto = game.align(tag8, cfg.tag8_distance_m)
                     if game.aligned(tag8, cfg.tag8_distance_m):
                         game.stage = Stage.WAIT_PASS
                 elif game.stage is Stage.WAIT_PASS and state.was_pressed(Button.CIRCLE):
-                    if game.start_timed(MotionCommand(forward=cfg.tunnel_speed), cfg.tunnel_sec, Stage.ALIGN_BOARD):
+                    if game.start_timed(MotionCommand(forward=cfg.tunnel_speed), cfg.tunnel_sec, Stage.WAIT_BOARD_ALIGN):
                         game.stage = Stage.PASSING
                 elif game.stage is Stage.PASSING:
                     auto = game.timed_command()
+                elif game.stage is Stage.WAIT_BOARD_ALIGN and state.was_pressed(Button.SQUARE):
+                    game.stage = Stage.ALIGN_BOARD
                 elif game.stage is Stage.ALIGN_BOARD:
-                    first = tags.get(12, camera_hensuu.tag_max_age_sec)
-                    second = tags.get(13, camera_hensuu.tag_max_age_sec)
+                    first = tags.get(cfg.tag_board_left, camera_hensuu.tag_max_age_sec)
+                    second = tags.get(cfg.tag_board_right, camera_hensuu.tag_max_age_sec)
                     target = midpoint(first, second) if first and second else None
                     auto = game.align(target, cfg.tag12_13_distance_m)
                     if game.aligned(target, cfg.tag12_13_distance_m):
@@ -211,8 +214,8 @@ def main() -> None:
                 elif game.stage is Stage.WAIT_RETURN and state.was_pressed(Button.L2):
                     game.stage = Stage.ALIGN_RETURN
                 elif game.stage is Stage.ALIGN_RETURN:
-                    first = tags.get(6, camera_hensuu.tag_max_age_sec)
-                    second = tags.get(10, camera_hensuu.tag_max_age_sec)
+                    first = tags.get(cfg.tag_return_left, camera_hensuu.tag_max_age_sec)
+                    second = tags.get(cfg.tag_return_right, camera_hensuu.tag_max_age_sec)
                     target = midpoint(first, second) if first and second else None
                     auto = game.align(target, cfg.tag6_10_distance_m)
                     if game.aligned(target, cfg.tag6_10_distance_m):
@@ -221,7 +224,7 @@ def main() -> None:
                 elif game.stage is Stage.RETURN_THROUGH:
                     auto = game.timed_command()
                 elif game.stage is Stage.ALIGN_TAG0:
-                    tag0 = tags.get(0, camera_hensuu.tag_max_age_sec)
+                    tag0 = tags.get(cfg.tag_goal, camera_hensuu.tag_max_age_sec)
                     auto = game.align(tag0, cfg.tag0_distance_m)
                     if game.aligned(tag0, cfg.tag0_distance_m):
                         game.stage = Stage.DONE

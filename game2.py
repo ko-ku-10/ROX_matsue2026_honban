@@ -40,6 +40,7 @@ class Game2Auto:
     def __init__(self) -> None:
         self.stage = Stage.WAIT_BALL
         self.target_ids: tuple[int, ...] | None = None
+        self.target_row: str | None = None
         self.motion: TimedMotion | None = None
         self.error = ""
         self.stage_started = time.monotonic()
@@ -51,6 +52,7 @@ class Game2Auto:
     def reset_after_mode_change(self) -> None:
         self.motion = None
         self.target_ids = None
+        self.target_row = None
         self.enter(Stage.WAIT_BALL)
 
     def target(self, tags: TagStore) -> TagObservation | None:
@@ -62,19 +64,27 @@ class Game2Auto:
         first = observations[0]
         return first if len(observations) == 1 else midpoint(first, observations[-1])
 
+    def shot_distance(self) -> float | None:
+        """現在選んだ段で、Tagまで残す発射距離[m]を返す。"""
+        if self.target_row is None:
+            return None
+        return cfg.shot_distance_m.get(self.target_row)
+
     def align_command(self, tag: TagObservation | None, *, forward_allowed: bool) -> MotionCommand:
         if tag is None:
             return MotionCommand.stop()
         strafe = tag.horizontal_error * cfg.center_gain
         forward = 0.0
         if forward_allowed:
-            if tag.distance_m is None:
+            distance = self.shot_distance()
+            if tag.distance_m is None or distance is None:
                 return MotionCommand(strafe=strafe)
-            forward = max(-cfg.auto_speed, min(cfg.auto_speed, (tag.distance_m - cfg.approach_distance_m) * cfg.center_gain))
+            forward = max(-cfg.auto_speed, min(cfg.auto_speed, (tag.distance_m - distance) * cfg.center_gain))
         return MotionCommand(forward=forward, strafe=strafe)
 
     def distance_ready(self, tag: TagObservation | None) -> bool:
-        return bool(tag and tag.distance_m is not None and abs(tag.distance_m - cfg.approach_distance_m) <= cfg.distance_tolerance_m)
+        distance = self.shot_distance()
+        return bool(tag and distance is not None and tag.distance_m is not None and abs(tag.distance_m - distance) <= cfg.distance_tolerance_m)
 
     def center_ready(self, tag: TagObservation | None) -> bool:
         return bool(tag and abs(tag.horizontal_error) <= cfg.center_tolerance)
@@ -125,9 +135,13 @@ def main() -> None:
                 if game.stage is Stage.WAIT_BALL and state.was_pressed(Button.CREATE):
                     choice = choose_panel_target(tags, cfg.panel_rows, camera_hensuu.tag_max_age_sec)
                     game.target_ids = choice.tag_ids if choice else None
+                    game.target_row = choice.row if choice else None
                     if choice is None:
                         game.enter(Stage.FAULT)
                         game.error = "Tag14〜22が見えません。パネルへ向けてください"
+                    elif game.shot_distance() is None:
+                        game.enter(Stage.FAULT)
+                        game.error = f"{choice.row}段の shot_distance_m が未設定です"
                     else:
                         runtime.servos.lift.write(cfg.lift_ground_angle)
                         game.enter(Stage.APPROACH)
@@ -170,13 +184,14 @@ def main() -> None:
                     if game.motion.finished():
                         game.motion = None
                         game.target_ids = None
+                        game.target_row = None
                         game.enter(Stage.WAIT_BALL)
 
             command = add_manual_command(auto, runtime.manual_command(state), mode.auto_enabled)
             runtime.mecanum.drive(command)
             runtime.update_outputs()
             if game.stage is not previous_stage:
-                print(f"[{mode.mode.value}] {game.stage.value} target={game.target_ids}")
+                print(f"[{mode.mode.value}] {game.stage.value} target={game.target_ids} row={game.target_row} distance={game.shot_distance()}")
                 previous_stage = game.stage
             if camera_error and game.stage is not Stage.FAULT:
                 game.error = camera_error

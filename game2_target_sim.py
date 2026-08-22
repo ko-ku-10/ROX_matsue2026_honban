@@ -16,11 +16,8 @@ import game2_hensuu as cfg
 from rox_mecanum import AprilTagDetector, TagStore, choose_panel_target, open_camera
 
 
-PANEL_IDS = tuple(range(14, 23))
-
-
 def _ids_in_frame(detector: AprilTagDetector, image: object) -> tuple[int, ...]:
-    return tuple(sorted(item.tag_id for item in detector.detect(image) if item.tag_id in PANEL_IDS))
+    return tuple(sorted(item.tag_id for item in detector.detect(image) if item.tag_id in cfg.game2_tag_ids))
 
 
 def main() -> None:

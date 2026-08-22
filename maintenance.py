@@ -11,6 +11,8 @@ import socket
 import time
 
 import camera_hensuu
+import game1_hensuu
+import game2_hensuu
 import hensuu
 from rox_mecanum import (
     AprilTagDetector,
@@ -118,7 +120,8 @@ def main() -> None:
                     lift=runtime.servos.lift.status(),
                 )
 
-            fresh = tags.fresh((0, 1, 6, 8, 9, 10, 12, 13, *range(14, 23)), camera_hensuu.tag_max_age_sec)
+            monitored_tag_ids = (*game1_hensuu.game1_tag_ids, *game2_hensuu.game2_tag_ids)
+            fresh = tags.fresh(monitored_tag_ids, camera_hensuu.tag_max_age_sec)
             state_info.update(
                 message="カメラ・Tagを確認中",
                 tags={tag_id: {"x_error": round(item.horizontal_error, 3), "distance_m": item.distance_m} for tag_id, item in fresh.items()},

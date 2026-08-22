@@ -7,6 +7,23 @@
 game1_catch_start_angle = 0.0
 game1_lift_start_angle = 0.0
 
+# GAME1で使うTag番号。番号を変える時は、この欄だけを変更する。
+tag_start_primary = 1
+tag_start_fallback = 9
+tag_gate = 8
+tag_board_left = 12
+tag_board_right = 13
+tag_return_left = 6
+tag_return_right = 10
+tag_goal = 0
+
+# メンテナンス画面で表示するGAME1のTag一覧。
+game1_tag_ids = (
+    tag_start_primary, tag_start_fallback, tag_gate,
+    tag_board_left, tag_board_right,
+    tag_return_left, tag_return_right, tag_goal,
+)
+
 # 自動移動の最大速度（0.0〜1.0）。
 auto_speed = 0.20
 center_gain = 0.45

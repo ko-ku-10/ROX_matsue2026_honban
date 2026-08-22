@@ -59,6 +59,8 @@ GAME1ではCREATEで展開した後、lift/catchを動かしません。`game1_h
 
 パネルはTag 14〜22で判定します。中央段、上段、下段の順に選び、同じ段に2枚以上あれば中間を狙います。調整値は `game2_hensuu.py` にあります。
 
+発射時の高さが固定なら、`game2_hensuu.py` の `shot_distance_m` へ上・中央・下ごとの「カメラからTagまで残す距離」を入力します。実射して最も当たる距離を段ごとに記録してください。
+
 ## カメラとAprilTag
 
 カメラ設定は `camera_hensuu.py` にあります。
@@ -68,6 +70,8 @@ GAME1ではCREATEで展開した後、lift/catchを動かしません。`game1_h
 - `camera_device`: USB/V4L2カメラを使う場合の番号
 - `mipi_pipe_id` と `mipi_host_index`: RDK MIPIカメラ用。既定値のまま使う
 - `fisheye_enabled`: 魚眼校正後だけ `True` にする
+
+Tag番号とTagの役割は、GAME1は `game1_hensuu.py`、GAME2は `game2_hensuu.py` へまとめている。ゲーム本体の `.py` を書き換えずに、ここだけ変更する。
 - `camera_focal_length_px`: 校正後の焦点距離。`0.0`の間は距離を使う自動移動を完了しません。
 
 まず `maintenance.py --camera-only` を起動し、ブラウザで映像とTag番号を確認してください。画面にはカメラ映像、Tagの中心ずれ・距離、検出状態、通信エラーが表示されます。CREATEを物理的に押した後だけ、短時間のブラウザ駆動テストも使えます。
