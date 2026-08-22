@@ -17,5 +17,5 @@ mipi_fps = 30
 mipi_width = 1920
 mipi_height = 1080
 apriltag_size_m = 0.180
-camera_focal_length_px = 0.0
+camera_focal_length_px = 729.30
 tag_max_age_sec = 0.35

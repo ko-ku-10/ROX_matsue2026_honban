@@ -57,5 +57,5 @@ servo_feedback_timeout_sec = 0.25
 dashboard_port = 8000
 
 # ソレノイド
-solenoid_pin = 17
+solenoid_pin = 27
 solenoid_time_sec = 0.3

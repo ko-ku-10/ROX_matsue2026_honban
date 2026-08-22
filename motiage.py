@@ -49,7 +49,7 @@ try:
             servos.catch.write(-70)
             time.sleep(2.0)
 
-            servos.lift.write(0)
+            servos.lift.write(20)
             time.sleep(3.0)
 
             servos.catch.write(0)
