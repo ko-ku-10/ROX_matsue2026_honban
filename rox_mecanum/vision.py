@@ -1,4 +1,4 @@
-"""AprilTagとステレオカメラの共通部品。
+"""AprilTagと本番用単眼カメラの共通部品。
 
 OpenCVは実機でのみ必要。カメラが未接続のPCでも、このモジュールの
 データ構造やゲーム状態機械は利用・テストできる。
@@ -21,6 +21,7 @@ class TagObservation:
     image_width: int
     distance_m: float | None
     timestamp: float
+    pixel_size: float | None = None
 
     @property
     def horizontal_error(self) -> float:
@@ -94,7 +95,7 @@ class AprilTagDetector:
             distance = None
             if self.focal_length_px > 0.0 and pixel_size > 0.0:
                 distance = self.tag_size_m * self.focal_length_px / pixel_size
-            result.append(TagObservation(int(raw_id), center_x, center_y, int(width), distance, timestamp))
+            result.append(TagObservation(int(raw_id), center_x, center_y, int(width), distance, timestamp, pixel_size))
         return result
 
 
@@ -129,6 +130,31 @@ class OpenCVStereoCamera:
         for capture in (getattr(self, "left", None), getattr(self, "right", None)):
             if capture is not None:
                 capture.release()
+
+
+class OpenCVSingleCamera:
+    """USB/V4L2カメラを1台だけ読むアダプター。"""
+
+    def __init__(self, device: int | str = 0) -> None:
+        try:
+            import cv2
+        except ImportError as error:  # pragma: no cover - 実機依存
+            raise RuntimeError("OpenCVが必要です: pip install 'rox-mecanum[vision]'") from error
+        self.camera = cv2.VideoCapture(device)
+        if not self.camera.isOpened():
+            self.close()
+            raise RuntimeError("カメラを開けません。camera_hensuu.py を確認してください")
+
+    def read(self) -> object:
+        ok, image = self.camera.read()
+        if not ok:
+            raise RuntimeError("カメラ画像を取得できません")
+        return image
+
+    def close(self) -> None:
+        camera = getattr(self, "camera", None)
+        if camera is not None:
+            camera.release()
 
 
 class RDKMIPIStereoCamera:
@@ -249,6 +275,24 @@ def open_stereo_camera(
     raise ValueError("camera_backend は 'rdk_mipi' または 'v4l2' にしてください")
 
 
+def open_camera(
+    *,
+    backend: str,
+    device: int | str = 0,
+    pipe_id: int = 0,
+    host_index: int = -1,
+    fps: int = 30,
+    width: int = 1920,
+    height: int = 1080,
+) -> OpenCVSingleCamera | RDKMIPICamera:
+    """設定値に従って、本番用の単眼カメラを開く。"""
+    if backend == "rdk_mipi":
+        return RDKMIPICamera(pipe_id, host_index, fps, width, height)
+    if backend == "v4l2":
+        return OpenCVSingleCamera(device)
+    raise ValueError("camera_backend は 'rdk_mipi' または 'v4l2' にしてください")
+
+
 def midpoint(first: TagObservation, second: TagObservation) -> TagObservation:
     """2枚のTagの中間を、中心合わせ用の仮想Tagとして返す。"""
     distance_values = [value for value in (first.distance_m, second.distance_m) if value is not None]
@@ -260,4 +304,5 @@ def midpoint(first: TagObservation, second: TagObservation) -> TagObservation:
         image_width=first.image_width,
         distance_m=distance,
         timestamp=min(first.timestamp, second.timestamp),
+        pixel_size=(first.pixel_size + second.pixel_size) / 2.0 if first.pixel_size is not None and second.pixel_size is not None else None,
     )

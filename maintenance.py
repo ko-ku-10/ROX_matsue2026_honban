@@ -17,7 +17,7 @@ from rox_mecanum import (
     Button,
     MaintenanceSite,
     MotionCommand,
-    open_stereo_camera,
+    open_camera,
     RobotRuntime,
     TagStore,
 )
@@ -77,11 +77,9 @@ def main() -> None:
         return f"{name} を {TEST_SECONDS:.1f}秒テストします"
 
     try:
-        camera = open_stereo_camera(
-            backend=camera_hensuu.camera_backend, left_device=camera_hensuu.left_camera_device,
-            right_device=camera_hensuu.right_camera_device, left_pipe_id=camera_hensuu.left_mipi_pipe_id,
-            left_host_index=camera_hensuu.left_mipi_host_index, right_pipe_id=camera_hensuu.right_mipi_pipe_id,
-            right_host_index=camera_hensuu.right_mipi_host_index, fps=camera_hensuu.mipi_fps,
+        camera = open_camera(
+            backend=camera_hensuu.camera_backend, device=camera_hensuu.camera_device,
+            pipe_id=camera_hensuu.mipi_pipe_id, host_index=camera_hensuu.mipi_host_index, fps=camera_hensuu.mipi_fps,
             width=camera_hensuu.mipi_width, height=camera_hensuu.mipi_height,
         )
         detector = AprilTagDetector(camera_hensuu.apriltag_size_m, camera_hensuu.camera_focal_length_px)
@@ -93,11 +91,10 @@ def main() -> None:
 
         while True:
             started = time.monotonic()
-            left, right = camera.read()
-            observations = detector.detect(left)
+            image = camera.read()
+            observations = detector.detect(image)
             tags.update(observations)
-            site.set_frame("left", _jpeg_with_tags(left, observations))
-            site.set_frame("right", _jpeg_with_tags(right, []))
+            site.set_frame("left", _jpeg_with_tags(image, observations))
 
             state_info: dict[str, object] = {"camera_only": args.camera_only}
             if runtime is not None:

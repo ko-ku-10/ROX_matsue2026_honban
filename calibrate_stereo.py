@@ -10,6 +10,12 @@ ESCで計算して ``stereo_calibration.npz`` を保存する。
 
 from __future__ import annotations
 
+# 本番は単眼カメラへ変更した。古いコマンドを実行しても失敗しないように案内する。
+if __name__ == "__main__":
+    print("本番は単眼カメラです。次の形式で実行してください:")
+    print("  python3 calibrate_camera.py 1.00")
+    raise SystemExit(0)
+
 import numpy as np
 
 import camera_hensuu

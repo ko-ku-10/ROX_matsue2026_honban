@@ -12,6 +12,7 @@
 | GAME2 | `python3 game2.py` |
 | GAME2のパネル選択だけ確認 | `python3 game2_target_sim.py` |
 | カメラ・Tagだけ確認 | `python3 maintenance.py --camera-only` |
+| 単眼カメラの距離校正 | `python3 calibrate_camera.py 1.00` |
 | カメラ・Tag・モーターを部分確認 | `python3 maintenance.py` |
 | 従来の手動統合操作 | `python3 run_all.py` |
 
@@ -63,18 +64,19 @@ GAME1ではCREATEで展開した後、lift/catchを動かしません。`game1_h
 
 - Tag種類: `tag16h5`
 - Tagサイズ: 180 mm (`apriltag_size_m = 0.180`)
-- `left_camera_device` と `right_camera_device`: 左右カメラ番号
+- `camera_device`: USB/V4L2カメラを使う場合の番号
+- `mipi_pipe_id` と `mipi_host_index`: RDK MIPIカメラ用。既定値のまま使う
 - `camera_focal_length_px`: 校正後の焦点距離。`0.0`の間は距離を使う自動移動を完了しません。
 
-まず `maintenance.py --camera-only` を起動し、ブラウザで映像とTag番号を確認してください。画面には左右カメラ映像、Tagの中心ずれ・距離、検出状態、通信エラーが表示されます。CREATEを物理的に押した後だけ、短時間のブラウザ駆動テストも使えます。
+まず `maintenance.py --camera-only` を起動し、ブラウザで映像とTag番号を確認してください。画面にはカメラ映像、Tagの中心ずれ・距離、検出状態、通信エラーが表示されます。CREATEを物理的に押した後だけ、短時間のブラウザ駆動テストも使えます。
 
-距離を使う自動移動の前に、チェスボードを使って校正します。
+距離を使う自動移動の前に、公式AprilTag（180 mm）をカメラの正面に置き、メジャーでTag面までの距離を測って校正します。例えば1.00 mなら次を実行します。
 
 ```bash
-python3 calibrate_stereo.py
+python3 calibrate_camera.py 1.00
 ```
 
-表示された焦点距離を `camera_hensuu.py` の `camera_focal_length_px` へ入力してください。
+表示された焦点距離を `camera_hensuu.py` の `camera_focal_length_px` へ入力してください。Tagを斜めにせず、実機の取付高さ・解像度で行ってください。
 
 ## ライブラリを使うとき
 
