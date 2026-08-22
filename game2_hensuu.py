@@ -5,8 +5,8 @@ center_gain = 0.45
 center_tolerance = 0.08
 distance_tolerance_m = 0.08
 
-# 地面に置いた時と発射時のlift角度。実機で設定する。
-lift_ground_angle = 0.0
+# 地面に置いた時のlift角度は hensuu.py の lift_ball_ground_angle を使う。
+# ここでは発射高さだけをGAME2専用に設定する。
 lift_fire_angle = 0.0
 lift_target_timeout_sec = 8.0
 

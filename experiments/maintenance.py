@@ -1,7 +1,7 @@
 """本番では使わない、カメラ・Tag・駆動の部分実験用プログラム。
 
-カメラだけ確認: ``python3 maintenance.py --camera-only``
-ロボットも接続して確認: ``python3 maintenance.py``
+カメラだけ確認: ``python3 -m experiments.maintenance --camera-only``
+ロボットも接続して確認: ``python3 -m experiments.maintenance``
 """
 
 from __future__ import annotations
@@ -83,8 +83,6 @@ def main() -> None:
             backend=camera_hensuu.camera_backend, device=camera_hensuu.camera_device,
             pipe_id=camera_hensuu.mipi_pipe_id, host_index=camera_hensuu.mipi_host_index, fps=camera_hensuu.mipi_fps,
             width=camera_hensuu.mipi_width, height=camera_hensuu.mipi_height,
-            fisheye_calibration_file=camera_hensuu.fisheye_calibration_file if camera_hensuu.fisheye_enabled else None,
-            fisheye_balance=camera_hensuu.fisheye_balance,
         )
         detector = AprilTagDetector(camera_hensuu.apriltag_size_m, camera_hensuu.camera_focal_length_px)
         tags = TagStore()

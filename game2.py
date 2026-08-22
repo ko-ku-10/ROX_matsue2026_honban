@@ -25,6 +25,7 @@ from rox_mecanum import (
 
 class Stage(str, Enum):
     WAIT_BALL = "補給待ち: CREATEで照準開始"
+    SET_TRANSPORT_POSE = "ボール地面保持姿勢を確認中"
     APPROACH = "標的へ前進中"
     AIM_STRAFE = "横スライド照準中"
     AIM_READY = "照準完了: △で持上げ"
@@ -108,8 +109,6 @@ def main() -> None:
             backend=camera_hensuu.camera_backend, device=camera_hensuu.camera_device,
             pipe_id=camera_hensuu.mipi_pipe_id, host_index=camera_hensuu.mipi_host_index, fps=camera_hensuu.mipi_fps,
             width=camera_hensuu.mipi_width, height=camera_hensuu.mipi_height,
-            fisheye_calibration_file=camera_hensuu.fisheye_calibration_file if camera_hensuu.fisheye_enabled else None,
-            fisheye_balance=camera_hensuu.fisheye_balance,
         )
         detector = AprilTagDetector(camera_hensuu.apriltag_size_m, camera_hensuu.camera_focal_length_px)
         tags = TagStore()
@@ -143,7 +142,11 @@ def main() -> None:
                         game.enter(Stage.FAULT)
                         game.error = f"{choice.row}段の shot_distance_m が未設定です"
                     else:
-                        runtime.servos.lift.write(cfg.lift_ground_angle)
+                        runtime.set_ball_transport_pose()
+                        game.enter(Stage.SET_TRANSPORT_POSE)
+                elif game.stage is Stage.SET_TRANSPORT_POSE:
+                    # 地面保持姿勢へ到達するまで、ボールを持った走行を開始しない。
+                    if runtime.ball_transport_pose_ready():
                         game.enter(Stage.APPROACH)
                 elif game.stage is Stage.APPROACH:
                     tag = game.target(tags)
@@ -168,10 +171,10 @@ def main() -> None:
                     runtime.fire()
                     game.enter(Stage.FIRED)
                 elif game.stage is Stage.FIRED and state.was_pressed(Button.CROSS):
-                    runtime.servos.lift.write(cfg.lift_ground_angle)
+                    runtime.set_ball_transport_pose()
                     game.enter(Stage.LOWERING)
                 elif game.stage is Stage.LOWERING:
-                    if runtime.servos.lift.is_at_target():
+                    if runtime.ball_transport_pose_ready():
                         if cfg.retreat_sec <= 0.0:
                             game.enter(Stage.FAULT)
                             game.error = "retreat_secが0です。game2_hensuu.pyを設定してください"

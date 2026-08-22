@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-import mecanum
+from experiments import mecanum_manual as mecanum
 
 
 class MecanumProgramTests(unittest.TestCase):

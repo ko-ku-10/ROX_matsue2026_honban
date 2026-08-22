@@ -18,9 +18,9 @@ try:
     # 起動時に1回だけ原点を登録する
     servos.attach()
     servos.home_from_feedback()
-    # run_all.pyの保持用低速設定とは別に、motiage.pyでは強い速度で動かす。
-    servos.set_pid("catch", max_speed_percent=hensuu.motiage_move_speed_percent)
-    servos.set_pid("lift", max_speed_percent=hensuu.motiage_move_speed_percent)
+    # PID保持用の低速設定とは別に、目標角度へ動かす時だけ速度を上げる。
+    servos.set_pid("catch", max_speed_percent=hensuu.mechanism_move_speed_percent)
+    servos.set_pid("lift", max_speed_percent=hensuu.mechanism_move_speed_percent)
     servos.start_pid()  # PID保持を自動で開始する
 
     while True:

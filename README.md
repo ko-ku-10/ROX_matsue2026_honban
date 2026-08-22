@@ -1,147 +1,130 @@
 # ROX2026 ロボットプログラム
 
-このリポジトリは、ROX2026用のメカナムロボットをPythonで操作するためのコードです。ゲームごとの実行プログラムは分け、共通の難しい処理は `rox_mecanum` ライブラリへまとめています。
+本番は **GAME1** と **GAME2** だけを実行する。機構ごとの確認や距離測定は `experiments/` の実験プログラムで行う。
 
-## 最初に使うプログラム
+## フォルダ構成
 
-同じ `/dev/ttyUSB0` を使うため、次のプログラムは**同時に1つだけ**起動します。
-
-| 目的 | 実行コマンド |
+| 場所 | 役割 |
 |---|---|
-| GAME1 | `python3 game1.py` |
-| GAME2 | `python3 game2.py` |
-| GAME2のパネル選択だけ確認 | `python3 game2_target_sim.py` |
-| カメラ・Tagだけ確認 | `python3 maintenance.py --camera-only` |
-| 単眼カメラの距離校正 | `python3 calibrate_camera.py 1.00` |
-| 魚眼カメラの歪み校正 | `python3 calibrate_fisheye.py` |
-| カメラ・Tag・モーターを部分確認 | `python3 maintenance.py` |
-| 従来の手動統合操作 | `python3 run_all.py` |
+| `game1.py` | GAME1本番用 |
+| `game2.py` | GAME2本番用 |
+| `*_hensuu.py`, `hensuu.py` | 本番・実験で共通に使う調整値 |
+| `experiments/` | 本番では実行しない単体実験・カメラ確認 |
+| `rox_mecanum/` | 共通ライブラリ。通常は編集しない |
+| `tests/` | PC上で行う自動テスト |
 
-初回の必要パッケージです。
+## 本番で実行するもの
+
+```bash
+# GAME1
+python3 game1.py
+
+# GAME2
+python3 game2.py
+```
+
+起動直後は完全手動モード。タッチパッドで自動モードへ切り替える。OPTIONSは非常停止・終了。
+
+同じコントローラーやモーター通信を使うプログラムは、同時に起動しないこと。
+
+## 実験で実行するもの
+
+必ずリポジトリのフォルダで、`python3 -m` を付けて実行する。
+
+```bash
+cd ~/Desktop/honban/ROX_matsue2026_honban
+
+# メカナム手動走行だけ
+python3 -m experiments.mecanum_manual
+
+# catch / lift の動作だけ
+python3 -m experiments.mechanism_manual
+
+# catch / lift の現在位置保持だけ
+python3 -m experiments.servo_hold
+
+# ソレノイドだけ
+python3 -m experiments.solenoid_test
+
+# カメラ映像とAprilTagだけ（モーターは動かない）
+python3 -m experiments.maintenance --camera-only
+
+# カメラ映像・Tag・短時間の駆動テスト
+python3 -m experiments.maintenance
+
+# GAME2でどのパネルを狙うかだけ確認（モーターは動かない）
+python3 -m experiments.game2_target
+
+# カメラからTagまでの距離を1.00mに置いて距離校正
+python3 -m experiments.calibrate_distance 1.00
+```
+
+`experiments.maintenance --camera-only` と `experiments.mecanum_manual` は同時に使える。ブラウザで映像を見ながら手動走行を確認できる。
+
+## 調整値を書く場所
+
+実験で確定した値は、実験用のファイルではなく次の設定ファイルへ書く。本番も同じ値を使う。
+
+| 変更したいもの | ファイル |
+|---|---|
+| メカナム、PID、catch/lift、ソレノイド | `hensuu.py` |
+| カメラ、Tagサイズ、焦点距離 | `camera_hensuu.py` |
+| GAME1のTag番号、時間、速度、距離 | `game1_hensuu.py` |
+| GAME2のパネルTag、段ごとの発射距離、速度 | `game2_hensuu.py` |
+
+ボールを扱う共通角度は `hensuu.py` にまとめる。移動中は
+`catch_ball_hold_angle`（地面で保持）と `lift_ball_ground_angle`（地面高さ）を使う。
+`catch_ball_grab_angle` は掴む時、`catch_ball_release_angle` はRobotの外へ出す時だけ使う。
+
+GAME2の段ごとの発射距離はここで設定する。
+
+```python
+# game2_hensuu.py
+shot_distance_m = {
+    "top": 1.20,
+    "middle": 1.20,
+    "bottom": 1.20,
+}
+```
+
+値は「カメラからパネルTagまで残す距離[m]」。実射して最も当たる値を、上・中央・下ごとに入れる。
+
+## 共通のコントローラー操作
+
+| 操作 | 機能 |
+|---|---|
+| 左スティック | 前後・左右の平行移動 |
+| R2 + 右スティック左右 | 旋回 |
+| タッチパッド押し込み | 完全手動 / 自動モード切替 |
+| OPTIONS | 非常停止・終了 |
+
+## GAME1の自動操作
+
+| ボタン | 動作 |
+|---|---|
+| CREATE | lift/catchを開始姿勢へ展開して固定 |
+| △ | Tag 1または9を基準にTag 8へ向かう |
+| ○ | Tag 8で位置合わせ後、ゲートを通過 |
+| □ | Tag 12・13への位置合わせを開始 |
+| R1 | 板を低速で押し込む |
+| × | 板へ上がれたことを操縦者が確定 |
+| L2 | Tag 6・10を通ってTag 0へ帰還 |
+
+## GAME2の自動操作
+
+| ボタン | 動作 |
+|---|---|
+| CREATE | パネル読取、段の選択、接近、横スライド照準 |
+| △ | liftを発射高さへ上げる |
+| L2 | 発射 |
+| × | liftを下げ、補給位置へ後退 |
+
+中央段、上段、下段の順に狙う。同じ段に2枚以上あれば、その中間を狙う。
+
+## 初回セットアップ
 
 ```bash
 python3 -m pip install --user '.[hardware,vision]'
 ```
 
-## 共通の操作
-
-| 操作 | 機能 |
-|---|---|
-| タッチパッド押し込み | 完全手動モード / 自動モード切替 |
-| 左スティック | 前後・左右への平行移動 |
-| R2 + 右スティック左右 | 旋回 |
-| OPTIONS | 全停止・終了 |
-
-起動直後は完全手動モードです。自動モード中でもスティック操作を足せます。タッチパッドでモードを切り替えた時は自動動作を停止し、勝手に再開しません。
-
-## GAME1の操作
-
-| ボタン | 動作 |
-|---|---|
-| CREATE | lift/catchを開始姿勢へ展開して固定 |
-| △ | Tag 1または9を基準に、Tag 8へ自動移動・中心合わせ |
-| ○ | Tag 8中心合わせ後にトンネルを通過 |
-| □ | Tag 12・13の中間へ自動停止 |
-| R1 | 低速で板を押し込み |
-| × | 板へ上がれたことを操縦者が確定 |
-| L2 | Tag 6・10の間を通ってTag 0へ帰還 |
-
-GAME1ではCREATEで展開した後、lift/catchを動かしません。`game1_hensuu.py` に距離・時間・開始角度を入力してから自動走行を使います。
-
-## GAME2の操作
-
-| ボタン | 動作 |
-|---|---|
-| CREATE | パネル読取、前進、横スライド照準を実行 |
-| △ | 照準成功後にliftを発射高さへ上げる |
-| L2 | 発射 |
-| × | liftを下げ、後退して補給位置へ戻る |
-
-パネルはTag 14〜22で判定します。中央段、上段、下段の順に選び、同じ段に2枚以上あれば中間を狙います。調整値は `game2_hensuu.py` にあります。
-
-発射時の高さが固定なら、`game2_hensuu.py` の `shot_distance_m` へ上・中央・下ごとの「カメラからTagまで残す距離」を入力します。実射して最も当たる距離を段ごとに記録してください。
-
-## カメラとAprilTag
-
-カメラ設定は `camera_hensuu.py` にあります。
-
-- Tag種類: `tag16h5`
-- Tagサイズ: 180 mm (`apriltag_size_m = 0.180`)
-- `camera_device`: USB/V4L2カメラを使う場合の番号
-- `mipi_pipe_id` と `mipi_host_index`: RDK MIPIカメラ用。既定値のまま使う
-- `fisheye_enabled`: 魚眼校正後だけ `True` にする
-
-Tag番号とTagの役割は、GAME1は `game1_hensuu.py`、GAME2は `game2_hensuu.py` へまとめている。ゲーム本体の `.py` を書き換えずに、ここだけ変更する。
-- `camera_focal_length_px`: 校正後の焦点距離。`0.0`の間は距離を使う自動移動を完了しません。
-
-まず `maintenance.py --camera-only` を起動し、ブラウザで映像とTag番号を確認してください。画面にはカメラ映像、Tagの中心ずれ・距離、検出状態、通信エラーが表示されます。CREATEを物理的に押した後だけ、短時間のブラウザ駆動テストも使えます。
-
-魚眼カメラでは、最初に競技用の180 mm AprilTag（Tag 0で可）を画面の中央・四隅・近距離・遠距離へ動かし、左右・上下にも傾けて歪みを校正します。チェスボードは不要です。
-
-```bash
-python3 calibrate_fisheye.py
-```
-
-完了後、`camera_hensuu.py` の `fisheye_enabled = True` に変更します。補正後の映像で、距離を使う自動移動の前に、公式AprilTag（180 mm）をカメラの正面に置き、メジャーでTag面までの距離を測って校正します。例えば1.00 mなら次を実行します。
-
-```bash
-python3 calibrate_camera.py 1.00
-```
-
-表示された焦点距離を `camera_hensuu.py` の `camera_focal_length_px` へ入力してください。Tagを斜めにせず、実機の取付高さ・解像度で行ってください。
-
-## ライブラリを使うとき
-
-```python
-from rox_mecanum import Button, MotionCommand, TagStore
-
-# メカナム移動は -1.0〜+1.0。
-command = MotionCommand(forward=0.3, strafe=-0.2, rotate=0.0)
-
-Button.CROSS       # ×
-Button.CIRCLE      # ○
-Button.SQUARE      # □
-Button.TRIANGLE    # △
-Button.CREATE      # CREATE
-Button.OPTIONS     # OPTIONS
-Button.TOUCHPAD    # タッチパッド押し込み
-```
-
-| クラス・関数 | 役割 |
-|---|---|
-| `PygameDualSense` | DualSense入力を読む |
-| `MotionCommand` | 前後・横・旋回の移動指令 |
-| `MecanumRobot.drive()` | 4輪モーターへ移動指令を送る |
-| `RobotRuntime` | コントローラー・メカナム・サーボをまとめて開く |
-| `TagStore` | 古いTag検出を無視して最新値だけ使う |
-| `AprilTagDetector` | tag16h5を検出する |
-| `ModeController` | 手動/自動モードの切替 |
-| `add_manual_command()` | 自動速度とスティック速度を安全に合成する |
-| `MaintenanceSite` | メンテナンス用ブラウザ画面 |
-
-## RobStride角度サーボ
-
-catchはCAN ID 5、liftはCAN ID 6です。実測角度 `mechPos (0x7019)` を使用し、速度積分で角度を推定しません。
-
-```python
-from servos import open_servos
-
-servos = open_servos()
-try:
-    servos.attach()
-    input("機械原点へ合わせてEnter: ")
-    servos.home_from_feedback()
-    servos.start_pid()
-    servos.lift.write(45)
-finally:
-    servos.close()
-```
-
-PID、角度範囲、最高速度は `hensuu.py` で調整します。初回は必ず低速で、機構を安全な位置に置いて確認してください。
-
-## 安全上の注意
-
-- 自動の距離・時間設定が未調整なら、値を `0.0` のままにして動かさないでください。
-- Tagやカメラを見失った時は、次段階へ進めず手動で位置を直します。
-- ブラウザの駆動テストは周囲を確認してから、物理CREATEを押して短時間だけ有効化します。
-- OPTIONSと実機の非常停止を常に使える状態にしてください。
+カメラ距離を使う自動接近の前に、180 mm AprilTagをカメラ正面1.00mへ置いて `experiments.calibrate_distance` を実行する。表示された値を `camera_hensuu.py` の `camera_focal_length_px` へ入力する。

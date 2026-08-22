@@ -3,9 +3,8 @@
 数値は安全な初期値。実機で低速から確認して変更する。
 """
 
-# CREATEで展開する開始姿勢。角度の原点は起動時に合わせた位置。
-game1_catch_start_angle = 0.0
-game1_lift_start_angle = 0.0
+# CREATEで展開する開始姿勢は hensuu.py の共通「地面保持姿勢」を使う。
+# GAME1の走行中は、catch/liftをここから動かさない。
 
 # GAME1で使うTag番号。番号を変える時は、この欄だけを変更する。
 tag_start_primary = 1

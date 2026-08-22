@@ -1,7 +1,7 @@
 """単眼カメラ用のAprilTag距離校正。
 
 実行:
-  python3 calibrate_camera.py 1.00
+  python3 -m experiments.calibrate_distance 1.00
 
 180 mmの公式AprilTagをカメラ正面ちょうど1.00 mに置く。表示された
 ``camera_focal_length_px`` を camera_hensuu.py へ転記する。
@@ -29,8 +29,6 @@ def main() -> None:
         backend=camera_hensuu.camera_backend, device=camera_hensuu.camera_device,
         pipe_id=camera_hensuu.mipi_pipe_id, host_index=camera_hensuu.mipi_host_index,
         fps=camera_hensuu.mipi_fps, width=camera_hensuu.mipi_width, height=camera_hensuu.mipi_height,
-        fisheye_calibration_file=camera_hensuu.fisheye_calibration_file if camera_hensuu.fisheye_enabled else None,
-        fisheye_balance=camera_hensuu.fisheye_balance,
     )
     detector = AprilTagDetector(camera_hensuu.apriltag_size_m)
     values: list[float] = []

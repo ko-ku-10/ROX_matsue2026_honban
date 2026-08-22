@@ -30,6 +30,19 @@ lift_90deg_time_sec = 0.124
 lift_direction = 1
 lift_brake_time_sec = 0.08
 
+# ボールを扱う時の共通角度（全GAME共通）
+# ボールを持って走る間は、必ず hold と ground の姿勢にする。
+# 3つのcatch角度は実機でゆっくり動かして測定してから入力する。
+# hold: 地面に付けたまま、ボールを落とさず保持する角度
+# grab: ボールを掴み始める角度
+# release: ボールをRobotの外へ出す（発射前など）角度
+catch_ball_hold_angle = 0.0
+catch_ball_grab_angle = 0.0
+catch_ball_release_angle = 0.0
+
+# ボールを持って移動する時のlift角度。地面に付く高さに設定する。
+lift_ball_ground_angle = 0.0
+
 # エンコーダーPID位置サーボ（外力に対して位置を保持する設定）
 # 直結なら 65536 / 360。ギヤがある場合は実機角度に合わせて増減する。
 catch_counts_per_degree = 65536.0 / 360.0
@@ -46,8 +59,8 @@ servo_pid_integral_limit = 30.0
 # 1周期で1台ずつ読むため、200Hzなら各モーターは100Hzで実測角度を更新する。
 # ±0.2°を超えた直後から低速で戻す。力を受けた直後の位置ずれを小さくする。
 servo_max_speed_percent = 3.0
-# motiage.pyで目標角度へ動かす時だけ使う上限。保持用の3%とは分ける。
-motiage_move_speed_percent = 10.0
+# mechanism_manual実験で目標角度へ動かす時だけ使う上限。保持用の3%とは分ける。
+mechanism_move_speed_percent = 10.0
 servo_tolerance_deg = 0.2
 encoder_poll_hz = 200.0
 # この時間mechPos応答が来なければ保持出力を停止する（角度の推定はしない）。
