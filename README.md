@@ -40,6 +40,9 @@ python3 -m experiments.mecanum_manual
 # catch / lift の動作だけ
 python3 -m experiments.mechanism_manual
 
+# liftだけを低速で持上げ確認（△: 持上げ / ×: 戻す / OPTIONS: 停止）
+python3 -m experiments.lift_test
+
 # catch / lift の現在位置保持だけ
 python3 -m experiments.servo_hold
 

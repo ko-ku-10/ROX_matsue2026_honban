@@ -43,6 +43,10 @@ catch_ball_release_angle = 0.0
 # ボールを持って移動する時のlift角度。地面に付く高さに設定する。
 lift_ball_ground_angle = 0.0
 
+# experiments.lift_test 専用。△でこの角度へ動かす。
+# 初回は小さい角度で確認する。逆へ動いたら符号を反転する。
+lift_test_up_angle = -10.0
+
 # エンコーダーPID位置サーボ（外力に対して位置を保持する設定）
 # 直結なら 65536 / 360。ギヤがある場合は実機角度に合わせて増減する。
 catch_counts_per_degree = 65536.0 / 360.0
