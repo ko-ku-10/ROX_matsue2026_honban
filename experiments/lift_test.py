@@ -26,6 +26,7 @@ def main() -> None:
         servos.home_from_feedback()
         # 移動時だけ、hensuu.pyで決めた低速上限を使う。
         servos.set_pid("lift", max_speed_percent=hensuu.mechanism_move_speed_percent)
+        servos.hold_all_current()
         servos.start_pid()
         servos.lift.write(hensuu.lift_ball_ground_angle)
 

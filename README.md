@@ -8,6 +8,7 @@
 |---|---|
 | `game1.py` | GAME1本番用 |
 | `game2.py` | GAME2本番用 |
+| `game3.py` | GAME3・操作練習用 |
 | `*_hensuu.py`, `hensuu.py` | 本番・実験で共通に使う調整値 |
 | `experiments/` | 本番では実行しない単体実験・カメラ確認 |
 | `rox_mecanum/` | 共通ライブラリ。通常は編集しない |
@@ -21,9 +22,14 @@ python3 game1.py
 
 # GAME2
 python3 game2.py
+
+# GAME3・メカナム/catch/lift/ソレノイドの操作練習
+python3 game3.py
 ```
 
 起動直後は完全手動モード。タッチパッドで自動モードへ切り替える。OPTIONSは非常停止・終了。
+
+GAME3は常に手動操作である。CREATEで地面保持姿勢にしてから走行する。△で発射姿勢へ持上げ、到達後のL2だけがソレノイドを発射する。実行前に `game3_hensuu.py` の `lift_fire_angle` を実測値へ設定する。
 
 同じコントローラーやモーター通信を使うプログラムは、同時に起動しないこと。
 

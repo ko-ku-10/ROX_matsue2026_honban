@@ -21,6 +21,8 @@ try:
     # PID保持用の低速設定とは別に、目標角度へ動かす時だけ速度を上げる。
     servos.set_pid("catch", max_speed_percent=hensuu.mechanism_move_speed_percent)
     servos.set_pid("lift", max_speed_percent=hensuu.mechanism_move_speed_percent)
+    # start_pid()だけではPID保持は有効にならないため、現在位置を目標にする。
+    servos.hold_all_current()
     servos.start_pid()  # PID保持を自動で開始する
 
     while True:

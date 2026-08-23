@@ -51,6 +51,9 @@ class RobotRuntime:
             print("catch/liftを機械的な0度へ合わせてから Enter を押してください")
             input()
             servos.home_from_feedback()
+            # start_pid() は更新スレッドを始めるだけで保持はオンにしない。
+            # 原点登録した現在位置を明示的に目標にしてから開始する。
+            servos.hold_all_current()
             servos.start_pid()
             return cls(
                 controller=controller,
