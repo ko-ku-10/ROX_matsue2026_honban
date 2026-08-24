@@ -43,12 +43,25 @@ def main() -> None:
         mechanism = BallMechanism(runtime.servos)
         stage = Stage.IDLE
         stage_started = time.monotonic()
+        settled_at = None
         previous_stage = None
 
         def enter(next_stage: Stage) -> None:
-            nonlocal stage, stage_started
+            nonlocal stage, stage_started, settled_at
             stage = next_stage
             stage_started = time.monotonic()
+            settled_at = None
+
+        def ready_after_settle(at_target: bool, now: float) -> bool:
+            """目標角度に到達後、反動が収まるまで設定時間だけ待つ。"""
+            nonlocal settled_at
+            if not at_target:
+                settled_at = None
+                return False
+            if settled_at is None:
+                settled_at = now
+                return False
+            return now - settled_at >= cfg.mechanism_settle_sec
 
         while True:
             started = time.monotonic()
@@ -98,19 +111,19 @@ def main() -> None:
             elif stage is Stage.RELEASING:
                 if runtime.servos.catch.is_at_target():
                     stage = Stage.IDLE
-            elif stage is Stage.LIFT_FIRST and runtime.servos.lift.is_at_target():
+            elif stage is Stage.LIFT_FIRST and ready_after_settle(runtime.servos.lift.is_at_target(), started):
                 runtime.servos.catch.write(cfg.sequence_catch_grab_angle)
                 enter(Stage.CATCH_GRAB)
-            elif stage is Stage.CATCH_GRAB and runtime.servos.catch.is_at_target():
+            elif stage is Stage.CATCH_GRAB and ready_after_settle(runtime.servos.catch.is_at_target(), started):
                 runtime.servos.lift.write(cfg.sequence_lift_after_grab_angle)
                 enter(Stage.LIFT_AFTER_GRAB)
-            elif stage is Stage.LIFT_AFTER_GRAB and runtime.servos.lift.is_at_target():
+            elif stage is Stage.LIFT_AFTER_GRAB and ready_after_settle(runtime.servos.lift.is_at_target(), started):
                 runtime.servos.catch.write(cfg.sequence_catch_release_angle)
                 enter(Stage.CATCH_RELEASE)
-            elif stage is Stage.CATCH_RELEASE and runtime.servos.catch.is_at_target():
+            elif stage is Stage.CATCH_RELEASE and ready_after_settle(runtime.servos.catch.is_at_target(), started):
                 runtime.servos.lift.write(cfg.lift_fire_angle)
                 enter(Stage.LIFT_FIRE)
-            elif stage is Stage.LIFT_FIRE and runtime.servos.lift.is_at_target():
+            elif stage is Stage.LIFT_FIRE and ready_after_settle(runtime.servos.lift.is_at_target(), started):
                 runtime.fire()
                 print("発射: ソレノイド ON")
                 stage = Stage.FIRED
