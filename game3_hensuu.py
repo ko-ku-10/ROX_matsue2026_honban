@@ -1,12 +1,22 @@
 """GAME3・操作練習専用の実機調整値。"""
 
-# △で開始するGAME3連続動作の角度。
-# 各段階はエンコーダー到達確認後に次へ進む。実機に合わせて調整する。
-sequence_lift_first_angle = 110
-sequence_catch_grab_angle = -70.0
-sequence_lift_after_grab_angle = 20.0
-sequence_catch_release_angle = 0.0
-lift_fire_angle = 110.0
+# ===== ここを上から順に編集するだけ =====
+# △で始まる「持上げ」の順番。
+# ("lift" または "catch", 動かしたい角度) の順に書く。
+# 最後の行まで到達したら、ソレノイドを1回だけ発射する。
+motiage_steps = [
+    ("lift", 110),
+    ("catch", -70),
+    ("lift", 20),
+    ("catch", 0),
+    ("lift", 110),
+]
+
+# 発射姿勢だけを単体確認する実験用。通常は上の最後のlift角度と同じ値にする。
+lift_fire_angle = 110
+
+# ソレノイドのON時間[秒]は hensuu.py の solenoid_time_sec で変更する。
+# GAME3のR1、GAME2の発射、単体テストも同じ時間になる。
 
 # lift/catchが発射姿勢へ到達するまでの最大待機時間[秒]。
 mechanism_target_timeout_sec = 8.0
@@ -14,6 +24,10 @@ mechanism_target_timeout_sec = 8.0
 # 各角度へ到達してから、反動が収まるまで待つ時間[秒]。
 # まだ速すぎる・揺れる場合は 0.8、1.0 の順に増やす。
 mechanism_settle_sec = 0.5
+
+# 持上げで「到達」とみなす角度誤差[度]。
+# PID保持の細かい停止範囲とは別。実機で110度付近まで来たのに進まない時は増やす。
+sequence_target_tolerance_deg = 3.0
 
 # スティック中立の微小なズレでは走らない範囲（0.0〜1.0）。
 # 勝手に動く場合は 0.20、0.25 の順に少しずつ大きくする。

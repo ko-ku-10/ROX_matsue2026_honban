@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from time import monotonic
-
 import hensuu
 
 from .ball_mechanism import set_transport_pose, transport_pose_ready
@@ -28,7 +26,6 @@ class RobotRuntime:
     servos: object
     mapping: DualSenseMotionMapping
     solenoid: RDKSolenoid | None = None
-    solenoid_until: float = 0.0
 
     @classmethod
     def open(cls, *, with_solenoid: bool) -> "RobotRuntime":
@@ -90,20 +87,17 @@ class RobotRuntime:
     def fire(self) -> None:
         if self.solenoid is None:
             raise RuntimeError("このゲームではソレノイドを使いません")
-        self.solenoid.on()
-        self.solenoid_until = monotonic() + float(hensuu.solenoid_time_sec)
+        self.solenoid.pulse(hensuu.solenoid_time_sec)
 
     def update_outputs(self) -> None:
-        if self.solenoid is not None and self.solenoid_until and monotonic() >= self.solenoid_until:
-            self.solenoid.off()
-            self.solenoid_until = 0.0
+        if self.solenoid is not None:
+            self.solenoid.update()
 
     def emergency_stop(self) -> None:
         self.mecanum.stop()
         self.servos.release()
         if self.solenoid is not None:
             self.solenoid.off()
-        self.solenoid_until = 0.0
 
     def close(self) -> None:
         try:

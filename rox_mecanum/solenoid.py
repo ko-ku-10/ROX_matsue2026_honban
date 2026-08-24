@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from time import monotonic
+
 
 class RDKSolenoid:
     """Hobot.GPIOを使う、active-highのソレノイド出力。
@@ -23,12 +25,27 @@ class RDKSolenoid:
         # hensuu.pyの17は、従来どおりRaspberry Pi互換BCM番号17として使う。
         GPIO.setmode(GPIO.BCM)
         GPIO.setup(self.pin, GPIO.OUT, initial=GPIO.LOW)
+        self._off_at = 0.0
 
     def on(self) -> None:
         self._gpio.output(self.pin, self._gpio.HIGH)
 
     def off(self) -> None:
         self._gpio.output(self.pin, self._gpio.LOW)
+        self._off_at = 0.0
+
+    def pulse(self, duration_sec: float) -> None:
+        """指定時間だけONにする。本番・単体テスト共通の発射処理。"""
+        duration_sec = float(duration_sec)
+        if duration_sec <= 0.0:
+            raise ValueError("ソレノイドON時間は0秒より大きくしてください")
+        self.on()
+        self._off_at = monotonic() + duration_sec
+
+    def update(self) -> None:
+        """パルス終了時にOFFへ戻す。制御ループから繰り返し呼ぶ。"""
+        if self._off_at and monotonic() >= self._off_at:
+            self.off()
 
     def close(self) -> None:
         self.off()

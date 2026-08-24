@@ -5,7 +5,7 @@
 左スティック: メカナム移動 / R2 + 右スティック: 旋回
 CREATE: ボールを地面に付けた走行姿勢
 ○: catchを掴む角度 / □: catchをRobot外へ出す角度
-△: 掴む→持上げ→ソレノイド発射の連続動作 / ×: 地面走行姿勢へ戻す
+△: game3_hensuu.pyに書いた順で持上げ→ソレノイド発射 / ×: 地面走行姿勢へ戻す
 R1: ソレノイド単体テスト
 OPTIONS: 非常停止して終了
 """
@@ -26,11 +26,7 @@ class Stage(str, Enum):
     DRIBBLE = "ドリブル走行可能"
     GRABBING = "catchを掴む角度へ移動中"
     RELEASING = "catchを排出角度へ移動中"
-    LIFT_FIRST = "liftを110度へ移動中"
-    CATCH_GRAB = "catchを-70度へ移動中"
-    LIFT_AFTER_GRAB = "liftを20度へ移動中"
-    CATCH_RELEASE = "catchを0度へ移動中"
-    LIFT_FIRE = "liftを110度へ移動中（発射準備）"
+    MOTIAGE = "持上げ動作中"
     FIRED = "発射済み: ×で地面姿勢へ戻す"
     FAULT = "安全停止"
 
@@ -45,6 +41,7 @@ def main() -> None:
         stage_started = time.monotonic()
         settled_at = None
         previous_stage = None
+        motiage_step_index = 0
 
         def enter(next_stage: Stage) -> None:
             nonlocal stage, stage_started, settled_at
@@ -62,6 +59,19 @@ def main() -> None:
                 settled_at = now
                 return False
             return now - settled_at >= cfg.mechanism_settle_sec
+
+        def reached(servo: object, target_angle: float) -> bool:
+            """GAME3用の実機到達判定。PIDの細かすぎる停止範囲には依存しない。"""
+            current = servo.read()
+            return current is not None and abs(current - target_angle) <= cfg.sequence_target_tolerance_deg
+
+        def start_motiage_step() -> None:
+            """game3_hensuu.pyの1行を実行する。安全な到達確認は下で行う。"""
+            motor_name, angle = cfg.motiage_steps[motiage_step_index]
+            if motor_name not in {"lift", "catch"}:
+                raise ValueError("motiage_stepsのモーター名は 'lift' または 'catch' にしてください")
+            getattr(runtime.servos, motor_name).write(float(angle))
+            print(f"持上げ {motiage_step_index + 1}/{len(cfg.motiage_steps)}: {motor_name} -> {angle}度")
 
         while True:
             started = time.monotonic()
@@ -95,9 +105,12 @@ def main() -> None:
 
             # 発射姿勢はcatchを排出角度、liftを発射高さへ同時に動かす。
             elif state.was_pressed(Button.TRIANGLE):
-                # 前のmotiage.pyで作った順番を、待ち時間ではなく実測角度で進める。
-                runtime.servos.lift.write(cfg.sequence_lift_first_angle)
-                enter(Stage.LIFT_FIRST)
+                # 編集する順番は game3_hensuu.py の motiage_steps だけ。
+                if not cfg.motiage_steps:
+                    raise ValueError("motiage_stepsが空です。最低1行は書いてください")
+                motiage_step_index = 0
+                start_motiage_step()
+                enter(Stage.MOTIAGE)
 
             if stage is Stage.TRANSPORTING:
                 if runtime.ball_transport_pose_ready():
@@ -111,32 +124,30 @@ def main() -> None:
             elif stage is Stage.RELEASING:
                 if runtime.servos.catch.is_at_target():
                     stage = Stage.IDLE
-            elif stage is Stage.LIFT_FIRST and ready_after_settle(runtime.servos.lift.is_at_target(), started):
-                runtime.servos.catch.write(cfg.sequence_catch_grab_angle)
-                enter(Stage.CATCH_GRAB)
-            elif stage is Stage.CATCH_GRAB and ready_after_settle(runtime.servos.catch.is_at_target(), started):
-                runtime.servos.lift.write(cfg.sequence_lift_after_grab_angle)
-                enter(Stage.LIFT_AFTER_GRAB)
-            elif stage is Stage.LIFT_AFTER_GRAB and ready_after_settle(runtime.servos.lift.is_at_target(), started):
-                runtime.servos.catch.write(cfg.sequence_catch_release_angle)
-                enter(Stage.CATCH_RELEASE)
-            elif stage is Stage.CATCH_RELEASE and ready_after_settle(runtime.servos.catch.is_at_target(), started):
-                runtime.servos.lift.write(cfg.lift_fire_angle)
-                enter(Stage.LIFT_FIRE)
-            elif stage is Stage.LIFT_FIRE and ready_after_settle(runtime.servos.lift.is_at_target(), started):
-                runtime.fire()
-                print("発射: ソレノイド ON")
-                stage = Stage.FIRED
+            elif stage is Stage.MOTIAGE:
+                motor_name, angle = cfg.motiage_steps[motiage_step_index]
+                servo = getattr(runtime.servos, motor_name)
+                if ready_after_settle(reached(servo, float(angle)), started):
+                    motiage_step_index += 1
+                    if motiage_step_index == len(cfg.motiage_steps):
+                        runtime.fire()
+                        print("持上げ完了: ソレノイド ON")
+                        stage = Stage.FIRED
+                    else:
+                        start_motiage_step()
+                        # 各行ごとに最大待機時間を数え直す。
+                        enter(Stage.MOTIAGE)
 
             if stage in {
-                Stage.LIFT_FIRST,
-                Stage.CATCH_GRAB,
-                Stage.LIFT_AFTER_GRAB,
-                Stage.CATCH_RELEASE,
-                Stage.LIFT_FIRE,
+                Stage.MOTIAGE,
             } and started - stage_started > cfg.mechanism_target_timeout_sec:
                 stage = Stage.FAULT
-                print("連続動作が目標角度に到達しません。角度・PID・CAN通信を確認してください")
+                motor_name, angle = cfg.motiage_steps[motiage_step_index]
+                servo = getattr(runtime.servos, motor_name)
+                print(
+                    "連続動作が目標角度に到達しません。 "
+                    f"{motor_name}={servo.read()}度 target={angle}度"
+                )
 
             # 暴走防止: 中立付近のスティックずれは無視し、停止フレームを連続送信する。
             if stage is Stage.DRIBBLE:

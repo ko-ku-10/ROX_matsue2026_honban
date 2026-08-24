@@ -1,4 +1,4 @@
-"""L2を押すとソレノイドを指定時間だけONにする。"""
+"""L2を押すと、本番と同じソレノイド発射処理を単体確認する。"""
 
 import time
 
@@ -19,12 +19,11 @@ def main() -> None:
                 break
             pressed = state.button(Button.L2)
             if pressed and not was_pressed:
-                print("ソレノイド ON")
-                solenoid.on()
-                time.sleep(hensuu.solenoid_time_sec)
-                solenoid.off()
-                print("ソレノイド OFF")
+                # GAME2/GAME3の RobotRuntime.fire() と同じ共通処理。
+                solenoid.pulse(hensuu.solenoid_time_sec)
+                print(f"ソレノイド ON ({hensuu.solenoid_time_sec}秒)")
             was_pressed = pressed
+            solenoid.update()
             time.sleep(0.02)
     finally:
         solenoid.close()
