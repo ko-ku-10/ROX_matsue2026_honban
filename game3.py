@@ -104,12 +104,19 @@ def main() -> None:
                 print("発射")
                 stage = Stage.FIRED
 
-            # ボールを持つ想定の時は、地面保持姿勢でのみ走行を許可する。
+            # 暴走防止: 中立付近のスティックずれは無視し、停止フレームを連続送信する。
             if stage is Stage.DRIBBLE:
                 command = runtime.manual_command(state)
+                if state.left_stick.magnitude < cfg.manual_stick_deadzone:
+                    command = MotionCommand(rotate=command.rotate)
+                if state.right_stick.magnitude < cfg.manual_stick_deadzone:
+                    command = MotionCommand(forward=command.forward, strafe=command.strafe)
+                if command == MotionCommand.stop():
+                    runtime.mecanum.stop()
+                else:
+                    runtime.mecanum.drive(command)
             else:
-                command = MotionCommand.stop()
-            runtime.mecanum.drive(command)
+                runtime.mecanum.stop()
             runtime.update_outputs()
 
             if stage is not previous_stage:

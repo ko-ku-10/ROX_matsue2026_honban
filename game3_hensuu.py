@@ -6,3 +6,7 @@ lift_fire_angle = None
 
 # lift/catchが発射姿勢へ到達するまでの最大待機時間[秒]。
 mechanism_target_timeout_sec = 8.0
+
+# スティック中立の微小なズレでは走らない範囲（0.0〜1.0）。
+# 勝手に動く場合は 0.20、0.25 の順に少しずつ大きくする。
+manual_stick_deadzone = 0.18
