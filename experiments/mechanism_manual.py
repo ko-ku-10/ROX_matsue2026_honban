@@ -10,8 +10,7 @@ import time
 
 import game3_hensuu as cfg
 import hensuu
-from rox_mecanum import Button, open_configured_dualsense
-from rox_mecanum.ball_mechanism import set_fire_pose, set_grab_pose, set_release_pose, set_transport_pose
+from rox_mecanum import BallMechanism, Button, open_configured_dualsense
 from servos import open_servos
 
 
@@ -29,6 +28,7 @@ def main() -> None:
         servos.set_pid("lift", max_speed_percent=hensuu.mechanism_move_speed_percent)
         servos.hold_all_current()
         servos.start_pid()
+        mechanism = BallMechanism(servos)
 
         print("CREATE/×: 地面保持  ○: 掴む  □: 排出  △: 発射姿勢  OPTIONS: 停止")
         while True:
@@ -36,19 +36,19 @@ def main() -> None:
             if state.was_pressed(Button.OPTIONS):
                 break
             if state.was_pressed(Button.CREATE) or state.was_pressed(Button.CROSS):
-                set_transport_pose(servos)
+                mechanism.ground()
                 print("地面保持姿勢")
             elif state.was_pressed(Button.CIRCLE):
-                set_grab_pose(servos)
+                mechanism.grab()
                 print("掴む姿勢")
             elif state.was_pressed(Button.SQUARE):
-                set_release_pose(servos)
+                mechanism.release()
                 print("排出姿勢")
             elif state.was_pressed(Button.TRIANGLE):
                 if cfg.lift_fire_angle is None:
                     print("game3_hensuu.py の lift_fire_angle を設定してください")
                 else:
-                    set_fire_pose(servos, cfg.lift_fire_angle)
+                    mechanism.fire_pose(cfg.lift_fire_angle)
                     print(f"発射姿勢: lift={cfg.lift_fire_angle}度")
             time.sleep(0.02)
     finally:

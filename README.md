@@ -29,11 +29,25 @@ python3 game3.py
 
 起動直後は完全手動モード。タッチパッドで自動モードへ切り替える。OPTIONSは非常停止・終了。
 
-GAME3は常に手動操作である。CREATEで地面保持姿勢にしてから走行する。△で発射姿勢へ持上げ、到達後のL2だけがソレノイドを発射する。実行前に `game3_hensuu.py` の `lift_fire_angle` を実測値へ設定する。
+GAME3は常に手動操作である。CREATEで地面保持姿勢にしてから走行する。△で発射姿勢へ持上げ、到達後のL2だけがソレノイドを発射する。R1は操作練習用のソレノイド単体テストで、機構姿勢に関係なく設定時間だけONにする。実行前に `game3_hensuu.py` の `lift_fire_angle` を実測値へ設定する。
 
 同じコントローラーやモーター通信を使うプログラムは、同時に起動しないこと。
 
 DualSenseは、起動時に `hensuu.py` の `dualsense_mac_address` へBluetooth接続を試し、OPTIONSまたは終了時に自動切断する。PSボタンでDualSenseの電源を入れてから起動する。これにより、プログラムを実行していない間は接続を維持せず、電池を節約できる。
+
+## ボール機構ライブラリ
+
+GAME3と機構実験は同じ `BallMechanism` を使う。実験で角度を調整すればGAME3にも同じ設定が反映される。
+
+```python
+from rox_mecanum import BallMechanism
+
+mechanism = BallMechanism(servos)
+mechanism.ground()          # 地面保持・走行姿勢
+mechanism.grab()            # 掴む
+mechanism.release()         # Robot外へ出す
+mechanism.fire_pose(30.0)   # 発射姿勢へ
+```
 
 ## 実験で実行するもの
 

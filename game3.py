@@ -6,6 +6,7 @@
 CREATE: ボールを地面に付けた走行姿勢
 ○: catchを掴む角度 / □: catchをRobot外へ出す角度
 △: 発射姿勢へ持上げ / L2: 発射 / ×: 地面走行姿勢へ戻す
+R1: ソレノイド単体テスト
 OPTIONS: 非常停止して終了
 """
 
@@ -16,7 +17,7 @@ from enum import Enum
 
 import game3_hensuu as cfg
 from rox_mecanum import Button, MotionCommand, RobotRuntime
-from rox_mecanum.ball_mechanism import fire_pose_ready, set_fire_pose, set_grab_pose, set_release_pose
+from rox_mecanum import BallMechanism
 
 
 class Stage(str, Enum):
@@ -36,6 +37,7 @@ def main() -> None:
     runtime = None
     try:
         runtime = RobotRuntime.open(with_solenoid=True)
+        mechanism = BallMechanism(runtime.servos)
         stage = Stage.IDLE
         stage_started = time.monotonic()
         previous_stage = None
@@ -47,6 +49,12 @@ def main() -> None:
                 print("OPTIONS: 非常停止")
                 break
 
+            # 操作練習用。機構の姿勢に関係なく、設定時間だけソレノイドをONにする。
+            # 実戦用の発射操作は下の「READY_TO_FIRE + L2」のまま分離する。
+            if state.was_pressed(Button.R1):
+                runtime.fire()
+                print("ソレノイド単体テスト: ON")
+
             # 走行姿勢へ戻す。catch/liftが両方到達するまで車輪は停止する。
             if state.was_pressed(Button.CREATE) or (stage is Stage.FIRED and state.was_pressed(Button.CROSS)):
                 runtime.set_ball_transport_pose()
@@ -55,11 +63,11 @@ def main() -> None:
 
             # catch角度の単体確認。機構が動く間は車輪を止める。
             elif state.was_pressed(Button.CIRCLE):
-                set_grab_pose(runtime.servos)
+                mechanism.grab()
                 stage = Stage.GRABBING
                 stage_started = started
             elif state.was_pressed(Button.SQUARE):
-                set_release_pose(runtime.servos)
+                mechanism.release()
                 stage = Stage.RELEASING
                 stage_started = started
 
@@ -69,7 +77,7 @@ def main() -> None:
                     stage = Stage.FAULT
                     print("game3_hensuu.py の lift_fire_angle を実測値に設定してください")
                 else:
-                    set_fire_pose(runtime.servos, cfg.lift_fire_angle)
+                    mechanism.fire_pose(cfg.lift_fire_angle)
                     stage = Stage.RAISING
                     stage_started = started
 
@@ -86,13 +94,14 @@ def main() -> None:
                 if runtime.servos.catch.is_at_target():
                     stage = Stage.IDLE
             elif stage is Stage.RAISING:
-                if fire_pose_ready(runtime.servos):
+                if mechanism.fire_ready():
                     stage = Stage.READY_TO_FIRE
                 elif started - stage_started > cfg.mechanism_target_timeout_sec:
                     stage = Stage.FAULT
                     print("発射姿勢に到達しません。角度・PID・CAN通信を確認してください")
             elif stage is Stage.READY_TO_FIRE and state.was_pressed(Button.L2):
                 runtime.fire()
+                print("発射")
                 stage = Stage.FIRED
 
             # ボールを持つ想定の時は、地面保持姿勢でのみ走行を許可する。

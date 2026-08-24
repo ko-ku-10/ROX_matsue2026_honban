@@ -45,6 +45,7 @@ from .vision import AprilTagDetector, OpenCVSingleCamera, OpenCVStereoCamera, RD
 from .runtime import RobotRuntime
 from .maintenance_site import MaintenanceSite
 from .targeting import PanelTarget, choose_panel_target
+from .ball_mechanism import BallMechanism
 
 __all__ = [
     "AT_NEUTRAL_VALUE",
@@ -56,6 +57,7 @@ __all__ = [
     "AnalogStick",
     "Axis",
     "Button",
+    "BallMechanism",
     "ControllerProfile",
     "ControllerState",
     "DualSenseMotionMapping",
