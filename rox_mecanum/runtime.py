@@ -26,9 +26,10 @@ class RobotRuntime:
     servos: object
     mapping: DualSenseMotionMapping
     solenoid: RDKSolenoid | None = None
+    solenoid2: RDKSolenoid | None = None
 
     @classmethod
-    def open(cls, *, with_solenoid: bool) -> "RobotRuntime":
+    def open(cls, *, with_solenoid: bool, with_solenoid2: bool = False) -> "RobotRuntime":
         """モーターを安全停止状態で有効化し、サーボPIDを起動する。"""
         from servos import open_servos
 
@@ -43,6 +44,11 @@ class RobotRuntime:
         )
         servos = open_servos(transport=transport)
         solenoid = RDKSolenoid(hensuu.solenoid_pin) if with_solenoid else None
+        solenoid2 = (
+            RDKSolenoid(hensuu.solenoid2_pin)
+            if with_solenoid2 and hensuu.solenoid2_pin is not None
+            else None
+        )
         try:
             mecanum.enable_all(retries=3, interval=0.05)
             servos.attach()
@@ -60,6 +66,7 @@ class RobotRuntime:
                 mecanum=mecanum,
                 servos=servos,
                 solenoid=solenoid,
+                solenoid2=solenoid2,
                 mapping=DualSenseMotionMapping(
                     deadzone=0.08,
                     rotation_enable=Button.R2 if hensuu.mecanum_rotation_requires_r2 else None,
@@ -68,6 +75,8 @@ class RobotRuntime:
         except Exception:
             if solenoid is not None:
                 solenoid.close()
+            if solenoid2 is not None:
+                solenoid2.close()
             servos.close()
             transport.close()
             controller.close()
@@ -95,12 +104,16 @@ class RobotRuntime:
     def update_outputs(self) -> None:
         if self.solenoid is not None:
             self.solenoid.update()
+        if self.solenoid2 is not None:
+            self.solenoid2.update()
 
     def emergency_stop(self) -> None:
         self.mecanum.stop()
         self.servos.release()
         if self.solenoid is not None:
             self.solenoid.off()
+        if self.solenoid2 is not None:
+            self.solenoid2.off()
 
     def close(self) -> None:
         try:
@@ -109,5 +122,7 @@ class RobotRuntime:
             self.servos.close()
             if self.solenoid is not None:
                 self.solenoid.close()
+            if self.solenoid2 is not None:
+                self.solenoid2.close()
             self.transport.close()
             self.controller.close()

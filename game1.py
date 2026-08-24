@@ -1,244 +1,319 @@
-"""ROX2026 GAME1専用プログラム。
+"""ROX2026 GAME1。
 
-実行: ``python3 game1.py``
-設定値は game1_hensuu.py だけを変更する。
+実行: python3 game1.py
+このファイルにGAME1の動きと停止条件を直接書く。
+GAME1中はCREATEで開始姿勢にした後、lift/catchを動かさない。
 """
 
 from __future__ import annotations
 
 import time
-from enum import Enum
 
 import camera_hensuu
-import game1_hensuu as cfg
 from rox_mecanum import (
     AprilTagDetector,
     Button,
-    ControlMode,
     ModeController,
     MotionCommand,
-    open_camera,
     RobotRuntime,
-    TagObservation,
     TagStore,
-    TimedMotion,
     add_manual_command,
     midpoint,
+    open_camera,
 )
 
 
-class Stage(str, Enum):
-    WAIT_DEPLOY = "CREATEで開始姿勢へ展開"
-    DEPLOYING = "lift/catchを展開中"
-    WAIT_START = "△でTag1/9からTag8へ移動"
-    FIND_REFERENCE = "Tag1/9を探索中"
-    TURN = "反対向きへ旋回中"
-    SLIDE = "Tag8を探して横移動中"
-    ALIGN_TAG8 = "Tag8へ中心合わせ中"
-    WAIT_PASS = "○でトンネル通過"
-    PASSING = "トンネル通過中"
-    WAIT_BOARD_ALIGN = "□でTag12・13への位置合わせを開始"
-    ALIGN_BOARD = "Tag12/13へ中心合わせ中"
-    WAIT_PUSH = "R1で板を押す"
-    PUSHING = "板を押し込み中"
-    WAIT_CONFIRM = "×で板へ上がったことを確認"
-    WAIT_RETURN = "L2でTag6/10から帰還"
-    ALIGN_RETURN = "Tag6/10の中央へ中心合わせ中"
-    RETURN_THROUGH = "Tag6/10を通過中"
-    ALIGN_TAG0 = "Tag0へ中心合わせ中"
-    DONE = "GAME1完了"
-    FAULT = "自動停止"
+# ==================================================
+# ここはGAME1の実際の動き。必要なら直接書き換える。
+# ==================================================
 
+# GAME1で使うTag番号。
+TAG_START_PRIMARY = 1
+TAG_START_FALLBACK = 9
+TAG_GATE = 8
+TAG_BOARD_LEFT = 12
+TAG_BOARD_RIGHT = 13
+TAG_RETURN_LEFT = 6
+TAG_RETURN_RIGHT = 10
+TAG_GOAL = 0
 
-class Game1Auto:
-    """GAME1固有の状態だけを管理する。ハードウェアは持たない。"""
+# CREATEで作る開始姿勢。以後GAME1中はlift/catchを動かさない。
+START_CATCH_ANGLE = 0.0
+START_LIFT_ANGLE = 0.0
 
-    def __init__(self) -> None:
-        self.stage = Stage.WAIT_DEPLOY
-        self.side_a = True
-        self.motion: TimedMotion | None = None
-        self.error = ""
-        self.deployed = False
+# Tagを中心・目標距離へ寄せる速さと許容範囲。
+AUTO_SPEED = 0.20
+CENTER_GAIN = 0.45
+CENTER_TOLERANCE = 0.08
+DISTANCE_TOLERANCE_M = 0.08
 
-    def reset_after_mode_change(self) -> None:
-        """自動の途中再開を禁止する。展開済みなら最初の走行承認へ戻す。"""
-        self.motion = None
-        self.stage = Stage.WAIT_START if self.deployed else Stage.WAIT_DEPLOY
+# Tagごとに止まりたい距離[m]。実測後に変更する。
+TAG8_DISTANCE_M = 0.80
+TAG12_13_DISTANCE_M = 0.80
+TAG6_10_DISTANCE_M = 0.80
+TAG0_DISTANCE_M = 0.80
 
-    def start_timed(self, command: MotionCommand, duration: float, next_stage: Stage) -> bool:
-        if duration <= 0.0:
-            self.stage = Stage.FAULT
-            self.error = "時間式移動の秒数が0です。game1_hensuu.pyを設定してください"
-            return False
-        self.motion = TimedMotion(command, duration)
-        self.motion.start()
-        self._next_stage = next_stage
-        return True
+# 時間で行う動き。0秒のままでは安全のため動かない。
+TURN_AROUND_SPEED = 0.20
+TURN_AROUND_SEC = 0.0
+SLIDE_SPEED = 0.20
+SLIDE_SEC = 0.0
+TUNNEL_SPEED = 0.20
+TUNNEL_SEC = 0.0
+BOARD_PUSH_SPEED = 0.15
+BOARD_PUSH_SEC = 0.0
+RETURN_THROUGH_SPEED = 0.20
+RETURN_THROUGH_SEC = 0.0
 
-    def timed_command(self) -> MotionCommand:
-        if self.motion is None:
-            return MotionCommand.stop()
-        command = self.motion.active_command()
-        if self.motion.finished():
-            self.motion = None
-            self.stage = self._next_stage
-            return MotionCommand.stop()
-        return command
-
-    def align(self, observation: TagObservation | None, target_distance: float) -> MotionCommand:
-        """Tagを画面中心・設定距離へ合わせる。距離未校正なら前進しない。"""
-        if observation is None:
-            return MotionCommand.stop()
-        strafe = observation.horizontal_error * cfg.center_gain
-        forward = 0.0
-        if observation.distance_m is not None:
-            forward = max(-cfg.auto_speed, min(cfg.auto_speed, (observation.distance_m - target_distance) * cfg.center_gain))
-        return MotionCommand(forward=forward, strafe=strafe)
-
-    def aligned(self, observation: TagObservation | None, target_distance: float) -> bool:
-        return bool(
-            observation
-            and observation.distance_m is not None
-            and abs(observation.horizontal_error) <= cfg.center_tolerance
-            and abs(observation.distance_m - target_distance) <= cfg.distance_tolerance_m
-        )
-
-
-def _read_tags(camera: object, detector: AprilTagDetector, store: TagStore) -> str | None:
-    try:
-        store.update(detector.detect(camera.read()))
-        return None
-    except Exception as error:  # 実機での抜け・再接続を安全側へ扱う。
-        return str(error)
+# SIDE Aの横移動方向。SIDE Bでは自動で反対になる。
+SIDE_A_SLIDE_SIGN = 1.0
 
 
 def main() -> None:
-    print("GAME1: タッチパッド=手動/自動, OPTIONS=非常停止")
+    print("GAME1: タッチパッド=手動/自動, CREATE=展開, △=Tag8へ, ○=通過, □=板合わせ, R1=押す, ×=上がった確認, L2=帰還")
     runtime = None
     camera = None
+
     try:
         runtime = RobotRuntime.open(with_solenoid=False)
         camera = open_camera(
-            backend=camera_hensuu.camera_backend, device=camera_hensuu.camera_device,
-            pipe_id=camera_hensuu.mipi_pipe_id, host_index=camera_hensuu.mipi_host_index, fps=camera_hensuu.mipi_fps,
-            width=camera_hensuu.mipi_width, height=camera_hensuu.mipi_height,
+            backend=camera_hensuu.camera_backend,
+            device=camera_hensuu.camera_device,
+            pipe_id=camera_hensuu.mipi_pipe_id,
+            host_index=camera_hensuu.mipi_host_index,
+            fps=camera_hensuu.mipi_fps,
+            width=camera_hensuu.mipi_width,
+            height=camera_hensuu.mipi_height,
         )
         detector = AprilTagDetector(camera_hensuu.apriltag_size_m, camera_hensuu.camera_focal_length_px)
         tags = TagStore()
         mode = ModeController()
-        game = Game1Auto()
-        previous_stage = None
+
+        stage = "CREATEで開始姿勢へ展開"
+        deployed = False
+        side_a = True
+        timed_command = MotionCommand.stop()
+        timed_until = 0.0
+        timed_next_stage = ""
+        shown_stage = None
 
         while True:
-            started = time.monotonic()
+            loop_started = time.monotonic()
             state = runtime.controller.read()
-            camera_error = _read_tags(camera, detector, tags)
-            if state.button(Button.OPTIONS):
+
+            # カメラ異常時は自動の速度を出さない。
+            try:
+                tags.update(detector.detect(camera.read()))
+                camera_error = ""
+            except Exception as error:
+                camera_error = str(error)
+
+            # OPTIONSは最優先。全モーターを止めて終了する。
+            if state.was_pressed(Button.OPTIONS):
                 print("OPTIONS: 非常停止")
+                runtime.emergency_stop()
                 break
+
+            # タッチパッドで完全手動 / 自動を切り替える。
             if mode.update(state):
-                # 自動のサーボ目標も中断し、現在位置だけをPID保持する。
                 runtime.servos.hold_all_current()
-                game.reset_after_mode_change()
+                timed_until = 0.0
+                stage = "△でTag1/9からTag8へ移動" if deployed else "CREATEで開始姿勢へ展開"
                 print(f"モード: {'自動' if mode.auto_enabled else '完全手動'}")
 
-            # SIDE選択は停止中だけ。A/Bで横移動を左右反転する。
-            if game.stage in {Stage.WAIT_DEPLOY, Stage.WAIT_START}:
+            # SIDE A/Bは開始前だけ選ぶ。横移動方向だけを反転する。
+            if stage in {"CREATEで開始姿勢へ展開", "△でTag1/9からTag8へ移動"}:
                 if state.was_pressed(Button.DPAD_LEFT):
-                    game.side_a = True
+                    side_a = True
                 if state.was_pressed(Button.DPAD_RIGHT):
-                    game.side_a = False
+                    side_a = False
 
             auto = MotionCommand.stop()
-            if mode.auto_enabled:
-                if game.stage is Stage.WAIT_DEPLOY and state.was_pressed(Button.CREATE):
-                    runtime.set_ball_transport_pose()
-                    game.stage = Stage.DEPLOYING
-                elif game.stage is Stage.DEPLOYING:
+
+            if camera_error:
+                stage = "自動停止: カメラエラー"
+
+            if mode.auto_enabled and not camera_error:
+                # CREATE: スタート時のサイズ用の姿勢へ移動する。
+                # ここからGAME1終了までlift/catchには命令を出さない。
+                if stage == "CREATEで開始姿勢へ展開" and state.was_pressed(Button.CREATE):
+                    runtime.servos.catch.write(START_CATCH_ANGLE)
+                    runtime.servos.lift.write(START_LIFT_ANGLE)
+                    stage = "lift/catchを展開中"
+
+                elif stage == "lift/catchを展開中":
                     if runtime.servos.catch.is_at_target() and runtime.servos.lift.is_at_target():
                         runtime.servos.hold_all_current()
-                        game.deployed = True
-                        game.stage = Stage.WAIT_START
-                elif game.stage is Stage.WAIT_START and state.was_pressed(Button.TRIANGLE):
-                    game.stage = Stage.FIND_REFERENCE
-                elif game.stage is Stage.FIND_REFERENCE:
-                    reference = tags.get(cfg.tag_start_primary, camera_hensuu.tag_max_age_sec) or tags.get(cfg.tag_start_fallback, camera_hensuu.tag_max_age_sec)
-                    if reference is not None:
-                        if game.start_timed(MotionCommand(rotate=cfg.turn_around_speed), cfg.turn_around_sec, Stage.SLIDE):
-                            game.stage = Stage.TURN
-                    else:
-                        game.error = "Tag1/9が見えません。手動で見える位置へ移動してください"
-                elif game.stage is Stage.TURN:
-                    auto = game.timed_command()
-                elif game.stage is Stage.SLIDE:
-                    tag8 = tags.get(cfg.tag_gate, camera_hensuu.tag_max_age_sec)
-                    if tag8 is not None:
-                        game.motion = None
-                        game.stage = Stage.ALIGN_TAG8
-                    elif game.motion is None:
-                        sign = cfg.side_a_slide_sign if game.side_a else -cfg.side_a_slide_sign
-                        game.start_timed(MotionCommand(strafe=sign * cfg.slide_speed), cfg.slide_sec, Stage.FAULT)
-                    else:
-                        auto = game.timed_command()
-                        if game.stage is Stage.FAULT:
-                            game.error = "Tag8を見つけられません。距離またはカメラ向きを確認してください"
-                elif game.stage is Stage.ALIGN_TAG8:
-                    tag8 = tags.get(cfg.tag_gate, camera_hensuu.tag_max_age_sec)
-                    auto = game.align(tag8, cfg.tag8_distance_m)
-                    if game.aligned(tag8, cfg.tag8_distance_m):
-                        game.stage = Stage.WAIT_PASS
-                elif game.stage is Stage.WAIT_PASS and state.was_pressed(Button.CIRCLE):
-                    if game.start_timed(MotionCommand(forward=cfg.tunnel_speed), cfg.tunnel_sec, Stage.WAIT_BOARD_ALIGN):
-                        game.stage = Stage.PASSING
-                elif game.stage is Stage.PASSING:
-                    auto = game.timed_command()
-                elif game.stage is Stage.WAIT_BOARD_ALIGN and state.was_pressed(Button.SQUARE):
-                    game.stage = Stage.ALIGN_BOARD
-                elif game.stage is Stage.ALIGN_BOARD:
-                    first = tags.get(cfg.tag_board_left, camera_hensuu.tag_max_age_sec)
-                    second = tags.get(cfg.tag_board_right, camera_hensuu.tag_max_age_sec)
-                    target = midpoint(first, second) if first and second else None
-                    auto = game.align(target, cfg.tag12_13_distance_m)
-                    if game.aligned(target, cfg.tag12_13_distance_m):
-                        game.stage = Stage.WAIT_PUSH
-                elif game.stage is Stage.WAIT_PUSH and state.was_pressed(Button.R1):
-                    if game.start_timed(MotionCommand(forward=cfg.board_push_speed), cfg.board_push_sec, Stage.WAIT_CONFIRM):
-                        game.stage = Stage.PUSHING
-                elif game.stage is Stage.PUSHING:
-                    auto = game.timed_command()
-                elif game.stage is Stage.WAIT_CONFIRM and state.was_pressed(Button.CROSS):
-                    game.stage = Stage.WAIT_RETURN
-                elif game.stage is Stage.WAIT_RETURN and state.was_pressed(Button.L2):
-                    game.stage = Stage.ALIGN_RETURN
-                elif game.stage is Stage.ALIGN_RETURN:
-                    first = tags.get(cfg.tag_return_left, camera_hensuu.tag_max_age_sec)
-                    second = tags.get(cfg.tag_return_right, camera_hensuu.tag_max_age_sec)
-                    target = midpoint(first, second) if first and second else None
-                    auto = game.align(target, cfg.tag6_10_distance_m)
-                    if game.aligned(target, cfg.tag6_10_distance_m):
-                        if game.start_timed(MotionCommand(forward=cfg.return_through_speed), cfg.return_through_sec, Stage.ALIGN_TAG0):
-                            game.stage = Stage.RETURN_THROUGH
-                elif game.stage is Stage.RETURN_THROUGH:
-                    auto = game.timed_command()
-                elif game.stage is Stage.ALIGN_TAG0:
-                    tag0 = tags.get(cfg.tag_goal, camera_hensuu.tag_max_age_sec)
-                    auto = game.align(tag0, cfg.tag0_distance_m)
-                    if game.aligned(tag0, cfg.tag0_distance_m):
-                        game.stage = Stage.DONE
+                        deployed = True
+                        stage = "△でTag1/9からTag8へ移動"
 
+                # △: Tag1が見えれば1、見えなければTag9を基準に反対向きへ旋回する。
+                elif stage == "△でTag1/9からTag8へ移動" and state.was_pressed(Button.TRIANGLE):
+                    stage = "Tag1/9を探索中"
+
+                elif stage == "Tag1/9を探索中":
+                    reference = tags.get(TAG_START_PRIMARY, camera_hensuu.tag_max_age_sec)
+                    if reference is None:
+                        reference = tags.get(TAG_START_FALLBACK, camera_hensuu.tag_max_age_sec)
+                    if reference is not None:
+                        if TURN_AROUND_SEC <= 0.0:
+                            stage = "自動停止: 旋回時間が0秒"
+                        else:
+                            timed_command = MotionCommand(rotate=TURN_AROUND_SPEED)
+                            timed_until = loop_started + TURN_AROUND_SEC
+                            timed_next_stage = "Tag8を探して横移動中"
+                            stage = "反対向きへ旋回中"
+                    else:
+                        stage = "自動停止: Tag1/9が見えない"
+
+                # 旋回・通過・押し込み・帰還は、終了時刻まで同じ速度を出す。
+                elif stage == "反対向きへ旋回中":
+                    if loop_started >= timed_until:
+                        stage = timed_next_stage
+                    else:
+                        auto = timed_command
+
+                # Tag8が見えるまで横へ移動。見つからないまま時間切れなら停止する。
+                elif stage == "Tag8を探して横移動中":
+                    tag8 = tags.get(TAG_GATE, camera_hensuu.tag_max_age_sec)
+                    if tag8 is not None:
+                        timed_until = 0.0
+                        stage = "Tag8へ中心合わせ中"
+                    elif timed_until == 0.0:
+                        if SLIDE_SEC <= 0.0:
+                            stage = "自動停止: 横移動時間が0秒"
+                        else:
+                            direction = SIDE_A_SLIDE_SIGN if side_a else -SIDE_A_SLIDE_SIGN
+                            timed_command = MotionCommand(strafe=direction * SLIDE_SPEED)
+                            timed_until = loop_started + SLIDE_SEC
+                    elif loop_started >= timed_until:
+                        stage = "自動停止: Tag8を見つけられない"
+                    else:
+                        auto = timed_command
+
+                # Tag8を画面中心・指定距離へ合わせる。
+                elif stage == "Tag8へ中心合わせ中":
+                    tag8 = tags.get(TAG_GATE, camera_hensuu.tag_max_age_sec)
+                    if tag8 is None or tag8.distance_m is None:
+                        stage = "自動停止: Tag8または距離が読めない"
+                    else:
+                        auto = MotionCommand(
+                            forward=max(-AUTO_SPEED, min(AUTO_SPEED, (tag8.distance_m - TAG8_DISTANCE_M) * CENTER_GAIN)),
+                            strafe=tag8.horizontal_error * CENTER_GAIN,
+                        )
+                        if abs(tag8.horizontal_error) <= CENTER_TOLERANCE and abs(tag8.distance_m - TAG8_DISTANCE_M) <= DISTANCE_TOLERANCE_M:
+                            stage = "○でトンネル通過"
+
+                # ○: Tag8での中心合わせ完了後だけ通過する。
+                elif stage == "○でトンネル通過" and state.was_pressed(Button.CIRCLE):
+                    if TUNNEL_SEC <= 0.0:
+                        stage = "自動停止: トンネル通過時間が0秒"
+                    else:
+                        timed_command = MotionCommand(forward=TUNNEL_SPEED)
+                        timed_until = loop_started + TUNNEL_SEC
+                        timed_next_stage = "□でTag12/13へ位置合わせ"
+                        stage = "トンネル通過中"
+
+                elif stage == "トンネル通過中":
+                    if loop_started >= timed_until:
+                        stage = timed_next_stage
+                    else:
+                        auto = timed_command
+
+                # □: Tag12と13の中間へ中心・距離を合わせる。
+                elif stage == "□でTag12/13へ位置合わせ" and state.was_pressed(Button.SQUARE):
+                    stage = "Tag12/13へ中心合わせ中"
+
+                elif stage == "Tag12/13へ中心合わせ中":
+                    tag12 = tags.get(TAG_BOARD_LEFT, camera_hensuu.tag_max_age_sec)
+                    tag13 = tags.get(TAG_BOARD_RIGHT, camera_hensuu.tag_max_age_sec)
+                    target = midpoint(tag12, tag13) if tag12 and tag13 else None
+                    if target is None or target.distance_m is None:
+                        stage = "自動停止: Tag12/13または距離が読めない"
+                    else:
+                        auto = MotionCommand(
+                            forward=max(-AUTO_SPEED, min(AUTO_SPEED, (target.distance_m - TAG12_13_DISTANCE_M) * CENTER_GAIN)),
+                            strafe=target.horizontal_error * CENTER_GAIN,
+                        )
+                        if abs(target.horizontal_error) <= CENTER_TOLERANCE and abs(target.distance_m - TAG12_13_DISTANCE_M) <= DISTANCE_TOLERANCE_M:
+                            stage = "R1で板を押す"
+
+                # R1: 操縦者が手動修正後、低速で板を押す。
+                elif stage == "R1で板を押す" and state.was_pressed(Button.R1):
+                    if BOARD_PUSH_SEC <= 0.0:
+                        stage = "自動停止: 押し込み時間が0秒"
+                    else:
+                        timed_command = MotionCommand(forward=BOARD_PUSH_SPEED)
+                        timed_until = loop_started + BOARD_PUSH_SEC
+                        timed_next_stage = "×で板へ上がったことを確認"
+                        stage = "板を押し込み中"
+
+                elif stage == "板を押し込み中":
+                    if loop_started >= timed_until:
+                        stage = timed_next_stage
+                    else:
+                        auto = timed_command
+
+                # ×: 板へ上がれたことを操縦者が目視で確定する。
+                elif stage == "×で板へ上がったことを確認" and state.was_pressed(Button.CROSS):
+                    stage = "L2でTag6/10から帰還"
+
+                # L2: Tag6/10の中間へ合わせ、Tag0へ帰る。
+                elif stage == "L2でTag6/10から帰還" and state.was_pressed(Button.L2):
+                    stage = "Tag6/10の中央へ中心合わせ中"
+
+                elif stage == "Tag6/10の中央へ中心合わせ中":
+                    tag6 = tags.get(TAG_RETURN_LEFT, camera_hensuu.tag_max_age_sec)
+                    tag10 = tags.get(TAG_RETURN_RIGHT, camera_hensuu.tag_max_age_sec)
+                    target = midpoint(tag6, tag10) if tag6 and tag10 else None
+                    if target is None or target.distance_m is None:
+                        stage = "自動停止: Tag6/10または距離が読めない"
+                    else:
+                        auto = MotionCommand(
+                            forward=max(-AUTO_SPEED, min(AUTO_SPEED, (target.distance_m - TAG6_10_DISTANCE_M) * CENTER_GAIN)),
+                            strafe=target.horizontal_error * CENTER_GAIN,
+                        )
+                        if abs(target.horizontal_error) <= CENTER_TOLERANCE and abs(target.distance_m - TAG6_10_DISTANCE_M) <= DISTANCE_TOLERANCE_M:
+                            if RETURN_THROUGH_SEC <= 0.0:
+                                stage = "自動停止: 帰還通過時間が0秒"
+                            else:
+                                timed_command = MotionCommand(forward=RETURN_THROUGH_SPEED)
+                                timed_until = loop_started + RETURN_THROUGH_SEC
+                                timed_next_stage = "Tag0へ中心合わせ中"
+                                stage = "Tag6/10を通過中"
+
+                elif stage == "Tag6/10を通過中":
+                    if loop_started >= timed_until:
+                        stage = timed_next_stage
+                    else:
+                        auto = timed_command
+
+                elif stage == "Tag0へ中心合わせ中":
+                    tag0 = tags.get(TAG_GOAL, camera_hensuu.tag_max_age_sec)
+                    if tag0 is None or tag0.distance_m is None:
+                        stage = "自動停止: Tag0または距離が読めない"
+                    else:
+                        auto = MotionCommand(
+                            forward=max(-AUTO_SPEED, min(AUTO_SPEED, (tag0.distance_m - TAG0_DISTANCE_M) * CENTER_GAIN)),
+                            strafe=tag0.horizontal_error * CENTER_GAIN,
+                        )
+                        if abs(tag0.horizontal_error) <= CENTER_TOLERANCE and abs(tag0.distance_m - TAG0_DISTANCE_M) <= DISTANCE_TOLERANCE_M:
+                            stage = "GAME1完了"
+
+            # 自動速度へ手動スティックを足す。完全手動なら手動だけになる。
             command = add_manual_command(auto, runtime.manual_command(state), mode.auto_enabled)
             runtime.mecanum.drive(command)
             runtime.update_outputs()
-            if game.stage is not previous_stage:
-                print(f"[{mode.mode.value}] {game.stage.value}  side={'A' if game.side_a else 'B'}")
-                previous_stage = game.stage
-            if camera_error:
-                game.error = camera_error
-            if game.error and game.stage is Stage.FAULT:
-                print(f"停止理由: {game.error}")
-            time.sleep(max(0.0, 1.0 / 50.0 - (time.monotonic() - started)))
+
+            if stage != shown_stage:
+                print(f"[{mode.mode.value}] {stage}  side={'A' if side_a else 'B'}")
+                shown_stage = stage
+
+            time.sleep(max(0.0, 1.0 / 50.0 - (time.monotonic() - loop_started)))
+
     except KeyboardInterrupt:
-        pass
+        if runtime is not None:
+            runtime.emergency_stop()
     finally:
         if camera is not None:
             camera.close()

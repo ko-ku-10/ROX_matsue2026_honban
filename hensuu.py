@@ -81,3 +81,5 @@ dashboard_port = 8000
 
 # ソレノイド
 solenoid_pin = 27
+# 2個目のGPIO番号。配線が決まるまで None のままにする（絶対にONにならない）。
+solenoid2_pin = None

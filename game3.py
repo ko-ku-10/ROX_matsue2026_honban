@@ -35,6 +35,7 @@ LIFT_FIRE_ANGLE = 110.0
 
 # 最後にソレノイドをONにする時間[秒]。
 SOLENOID_ON_TIME_SEC = 0.3
+SOLENOID2_ON_TIME_SEC = 0.3
 
 # 到達判定と安全停止の設定。
 TARGET_ERROR_DEG = 3.0
@@ -58,11 +59,11 @@ class Stage(str, Enum):
 
 
 def main() -> None:
-    print("GAME3: CREATE=地面姿勢 / ○=掴む / □=排出 / △=持上げ+発射 / R1=ソレノイド / OPTIONS=停止")
+    print("GAME3: CREATE=地面姿勢 / ○=掴む / □=排出 / △=持上げ+発射 / R1=ソレノイド1 / L1=ソレノイド2 / OPTIONS=停止")
     runtime = None
 
     try:
-        runtime = RobotRuntime.open(with_solenoid=True)
+        runtime = RobotRuntime.open(with_solenoid=True, with_solenoid2=True)
         stage = Stage.WAIT
         move_started = time.monotonic()
         reached_at = None
@@ -84,6 +85,14 @@ def main() -> None:
                     raise RuntimeError("ソレノイドが開かれていません")
                 runtime.solenoid.pulse(SOLENOID_ON_TIME_SEC)
                 print(f"ソレノイド ON: {SOLENOID_ON_TIME_SEC}秒")
+
+            # L1: 2個目のソレノイドだけを一回動かす。
+            if state.was_pressed(Button.L1):
+                if runtime.solenoid2 is None:
+                    print("ソレノイド2は未設定です。hensuu.py の solenoid2_pin を設定してください")
+                else:
+                    runtime.solenoid2.pulse(SOLENOID2_ON_TIME_SEC)
+                    print(f"ソレノイド2 ON: {SOLENOID2_ON_TIME_SEC}秒")
 
             # CREATE または ×: いつでも連続動作を中止し、地面走行姿勢へ戻す。
             if state.was_pressed(Button.CREATE) or state.was_pressed(Button.CROSS):

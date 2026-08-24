@@ -9,7 +9,8 @@
 | `game1.py` | GAME1本番用 |
 | `game2.py` | GAME2本番用 |
 | `game3.py` | GAME3・操作練習用 |
-| `*_hensuu.py`, `hensuu.py` | 本番・実験で共通に使う調整値 |
+| `game1.py`, `game2.py`, `game3.py` の先頭 | そのGAMEのTag、角度、速度、時間、ボタン動作 |
+| `hensuu.py` | CAN ID、シリアルポート、GPIO番号などの機体配線設定 |
 | `experiments/` | 本番では実行しない単体実験・カメラ確認 |
 | `rox_mecanum/` | 共通ライブラリ。通常は編集しない |
 | `tests/` | PC上で行う自動テスト |
@@ -29,27 +30,13 @@ python3 game3.py
 
 GAME1/GAME2は起動直後は完全手動モード。タッチパッドで自動モードへ切り替える。OPTIONSは非常停止・終了。GAME1〜3はEnter入力を待たず、catch/liftの起動時実測角度を自動で0度として登録する。起動前に機構を所定の開始姿勢へ置いておくこと。
 
-GAME3は常に手動操作である。CREATEで地面保持姿勢にしてから走行する。スティック中立付近の誤入力は `game3_hensuu.py` の `manual_stick_deadzone` で無視し、停止中は毎周期に停止指令を送る。△で `motiage.py` の `steps` に上から書いた順で連続動作を開始する。各行はエンコーダーで到達確認後、`mechanism_settle_sec` 秒だけ反動が収まるのを待ってから次へ進む。最後の行が終わると `solenoid.py` の動作で発射する。到達判定の範囲は `sequence_target_tolerance_deg` で調整する。R1は操作練習用のソレノイド単体テストで、機構姿勢に関係なく設定時間だけONにする。
+GAME3は常に手動操作である。CREATEで地面保持姿勢にしてから走行する。△の持上げは `game3.py` に直接書かれている。OPTIONS・角度到達失敗・Ctrl+C・終了時は必ず停止する。R1はソレノイド1、L1はソレノイド2の単体操作である。ソレノイド2は `hensuu.py` の `solenoid2_pin` を設定するまで動かない。
 
 同じコントローラーやモーター通信を使うプログラムは、同時に起動しないこと。
 
 DualSenseは、起動時に `hensuu.py` の `dualsense_mac_address` へBluetooth接続を試し、OPTIONSまたは終了時に自動切断する。PSボタンでDualSenseの電源を入れてから起動する。これにより、プログラムを実行していない間は接続を維持せず、電池を節約できる。
 
-## ボール機構ライブラリ
-
-GAME3と機構実験は同じ `BallMechanism` を使う。実験で角度を調整すればGAME3にも同じ設定が反映される。
-
-```python
-from rox_mecanum import BallMechanism
-
-mechanism = BallMechanism(servos)
-mechanism.ground()          # 地面保持・走行姿勢
-mechanism.grab()            # 掴む
-mechanism.release()         # Robot外へ出す
-mechanism.fire_pose(30.0)   # 発射姿勢へ
-```
-
-実験用ファイルは「この共通部が実機で動くか」を確認するための操作画面である。実験で確定した角度・速度は `hensuu.py` / `game3_hensuu.py` へ書く。GAME3にも反映したい動作そのものを変更する時は、`rox_mecanum/ball_mechanism.py` を変更する。
+実験用ファイルは、本番の `game1.py` / `game2.py` / `game3.py` の値を直接読み、実機で確認するための操作画面である。実験で確定した角度・速度・時間は、使うGAMEファイルの先頭へ書く。
 
 ## 実験で実行するもの
 
@@ -94,22 +81,19 @@ python3 -m experiments.calibrate_distance 1.00
 
 | 変更したいもの | ファイル |
 |---|---|
-| メカナム、PID、catch/lift、ソレノイド | `hensuu.py` |
+| CAN ID、シリアルポート、GPIO番号、PID | `hensuu.py` |
 | カメラ、Tagサイズ、焦点距離 | `camera_hensuu.py` |
-| GAME1のTag番号、時間、速度、距離 | `game1_hensuu.py` |
-| GAME2のパネルTag、段ごとの発射距離、速度 | `game2_hensuu.py` |
-
-ボールを扱う共通角度は `hensuu.py` にまとめる。移動中は
-`catch_ball_hold_angle`（地面で保持）と `lift_ball_ground_angle`（地面高さ）を使う。
-`catch_ball_grab_angle` は掴む時、`catch_ball_release_angle` はRobotの外へ出す時だけ使う。
+| GAME1のTag番号、時間、速度、距離 | `game1.py` の先頭 |
+| GAME2のパネルTag、段ごとの発射距離、速度 | `game2.py` の先頭 |
+| GAME3のcatch/lift角度、持上げ順番、ソレノイド時間 | `game3.py` の先頭 |
 
 GAME2の段ごとの発射距離はここで設定する。
 
 ```python
-# game2_hensuu.py
-shot_distance_m = {
-    "top": 1.20,
+# game2.py
+SHOT_DISTANCE_M = {
     "middle": 1.20,
+    "top": 1.20,
     "bottom": 1.20,
 }
 ```

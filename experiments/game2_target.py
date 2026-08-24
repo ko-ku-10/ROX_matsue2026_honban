@@ -12,12 +12,13 @@ from __future__ import annotations
 import time
 
 import camera_hensuu
-import game2_hensuu as cfg
+import game2
 from rox_mecanum import AprilTagDetector, TagStore, choose_panel_target, open_camera
 
 
 def _ids_in_frame(detector: AprilTagDetector, image: object) -> tuple[int, ...]:
-    return tuple(sorted(item.tag_id for item in detector.detect(image) if item.tag_id in cfg.game2_tag_ids))
+    panel_ids = {tag_id for row in game2.PANEL_ROWS.values() for tag_id in row}
+    return tuple(sorted(item.tag_id for item in detector.detect(image) if item.tag_id in panel_ids))
 
 
 def main() -> None:
@@ -40,7 +41,7 @@ def main() -> None:
             image = camera.read()
             detected_ids = _ids_in_frame(detector, image)
             tags.update(detector.detect(image))
-            choice = choose_panel_target(tags, cfg.panel_rows, camera_hensuu.tag_max_age_sec)
+            choice = choose_panel_target(tags, game2.PANEL_ROWS, camera_hensuu.tag_max_age_sec)
             current = (detected_ids, choice.label if choice else "なし")
             now = time.monotonic()
             if current != previous or now - last_report >= 1.0:
