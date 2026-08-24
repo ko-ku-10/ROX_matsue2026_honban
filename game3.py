@@ -1,13 +1,9 @@
-"""ROX2026 GAME3兼操作練習プログラム。
+"""ROX2026 GAME3 / 操作練習。
 
 実行: python3 game3.py
 
-左スティック: メカナム移動 / R2 + 右スティック: 旋回
-CREATE: ボールを地面に付けた走行姿勢
-○: catchを掴む角度 / □: catchをRobot外へ出す角度
-△: game3_hensuu.pyに書いた順で持上げ→ソレノイド発射 / ×: 地面走行姿勢へ戻す
-R1: ソレノイド単体テスト
-OPTIONS: 非常停止して終了
+このファイルにGAME3の動きを直接書く。
+ライブラリは通信・PID・非常停止だけを担当する。
 """
 
 from __future__ import annotations
@@ -15,166 +11,232 @@ from __future__ import annotations
 import time
 from enum import Enum
 
-import game3_hensuu as cfg
-import motiage
-import solenoid
 from rox_mecanum import Button, MotionCommand, RobotRuntime
-from rox_mecanum import BallMechanism
+
+
+# ==================================================
+# ここはGAME3の実際の動き。必要なら直接書き換える。
+# ==================================================
+
+# 地面にボールを付けて走る姿勢。
+GROUND_CATCH_ANGLE = 0.0
+GROUND_LIFT_ANGLE = 0.0
+
+# ○で掴む姿勢、□で排出する姿勢。
+GRAB_CATCH_ANGLE = 0.0
+RELEASE_CATCH_ANGLE = 0.0
+
+# △で実行する持上げの角度。
+LIFT_FIRST_ANGLE = 110.0
+CATCH_GRAB_ANGLE = -70.0
+LIFT_AFTER_GRAB_ANGLE = 20.0
+CATCH_RELEASE_ANGLE = 0.0
+LIFT_FIRE_ANGLE = 110.0
+
+# 最後にソレノイドをONにする時間[秒]。
+SOLENOID_ON_TIME_SEC = 0.3
+
+# 到達判定と安全停止の設定。
+TARGET_ERROR_DEG = 3.0
+SETTLE_TIME_SEC = 0.5
+MOVE_TIMEOUT_SEC = 8.0
+STICK_DEADZONE = 0.18
 
 
 class Stage(str, Enum):
-    IDLE = "手動走行・練習待ち"
-    TRANSPORTING = "地面保持姿勢へ移動中"
-    DRIBBLE = "ドリブル走行可能"
-    GRABBING = "catchを掴む角度へ移動中"
-    RELEASING = "catchを排出角度へ移動中"
-    MOTIAGE = "持上げ動作中"
+    WAIT = "手動走行・練習待ち"
+    GROUND = "地面走行姿勢へ移動中"
+    DRIVE = "ドリブル走行可能"
+    GRAB = "catchを掴む角度へ移動中"
+    RELEASE = "catchを排出角度へ移動中"
+    LIFT_FIRST = "liftを110度へ移動中"
+    CATCH_GRAB = "catchを-70度へ移動中"
+    LIFT_AFTER_GRAB = "liftを20度へ移動中"
+    CATCH_RELEASE = "catchを0度へ移動中"
+    LIFT_FIRE = "liftを110度へ移動中（発射準備）"
     FIRED = "発射済み: ×で地面姿勢へ戻す"
-    FAULT = "安全停止"
 
 
 def main() -> None:
-    print("GAME3 / 操作練習: OPTIONS=非常停止")
+    print("GAME3: CREATE=地面姿勢 / ○=掴む / □=排出 / △=持上げ+発射 / R1=ソレノイド / OPTIONS=停止")
     runtime = None
+
     try:
         runtime = RobotRuntime.open(with_solenoid=True)
-        mechanism = BallMechanism(runtime.servos)
-        stage = Stage.IDLE
-        stage_started = time.monotonic()
-        settled_at = None
-        previous_stage = None
-        motiage_step_index = 0
-
-        def enter(next_stage: Stage) -> None:
-            nonlocal stage, stage_started, settled_at
-            stage = next_stage
-            stage_started = time.monotonic()
-            settled_at = None
-
-        def ready_after_settle(at_target: bool, now: float) -> bool:
-            """目標角度に到達後、反動が収まるまで設定時間だけ待つ。"""
-            nonlocal settled_at
-            if not at_target:
-                settled_at = None
-                return False
-            if settled_at is None:
-                settled_at = now
-                return False
-            return now - settled_at >= cfg.mechanism_settle_sec
-
-        def reached(servo: object, target_angle: float) -> bool:
-            """GAME3用の実機到達判定。PIDの細かすぎる停止範囲には依存しない。"""
-            current = servo.read()
-            return current is not None and abs(current - target_angle) <= cfg.sequence_target_tolerance_deg
-
-        def start_motiage_step() -> None:
-            """game3_hensuu.pyの1行を実行する。安全な到達確認は下で行う。"""
-            motor_name, angle = motiage.steps[motiage_step_index]
-            if motor_name not in {"lift", "catch"}:
-                raise ValueError("motiage.py のモーター名は 'lift' または 'catch' にしてください")
-            getattr(runtime.servos, motor_name).write(float(angle))
-            print(f"持上げ {motiage_step_index + 1}/{len(motiage.steps)}: {motor_name} -> {angle}度")
+        stage = Stage.WAIT
+        move_started = time.monotonic()
+        reached_at = None
+        shown_stage = None
 
         while True:
-            started = time.monotonic()
+            loop_started = time.monotonic()
             state = runtime.controller.read()
+
+            # OPTIONSは最優先。全モーターとソレノイドを止めて終了する。
             if state.was_pressed(Button.OPTIONS):
                 print("OPTIONS: 非常停止")
+                runtime.emergency_stop()
                 break
 
-            # 操作練習用。機構の姿勢に関係なく、設定時間だけソレノイドをONにする。
-            # 実戦用の発射操作は下の「READY_TO_FIRE + L2」のまま分離する。
+            # R1: ソレノイドだけを一回動かす。lift/catchは動かさない。
             if state.was_pressed(Button.R1):
-                runtime.fire()
-                print("ソレノイド単体テスト: ON")
+                if runtime.solenoid is None:
+                    raise RuntimeError("ソレノイドが開かれていません")
+                runtime.solenoid.pulse(SOLENOID_ON_TIME_SEC)
+                print(f"ソレノイド ON: {SOLENOID_ON_TIME_SEC}秒")
 
-            # CREATE/×はいつでも連続動作を中止し、走行姿勢へ戻す。
-            # catch/liftが両方到達するまで車輪は停止する。
+            # CREATE または ×: いつでも連続動作を中止し、地面走行姿勢へ戻す。
             if state.was_pressed(Button.CREATE) or state.was_pressed(Button.CROSS):
-                runtime.set_ball_transport_pose()
-                stage = Stage.TRANSPORTING
-                stage_started = started
+                runtime.servos.catch.write(GROUND_CATCH_ANGLE)
+                runtime.servos.lift.write(GROUND_LIFT_ANGLE)
+                stage = Stage.GROUND
+                move_started = loop_started
+                reached_at = None
 
-            # catch角度の単体確認。機構が動く間は車輪を止める。
+            # ○: catchだけを掴む角度へ動かす。
             elif state.was_pressed(Button.CIRCLE):
-                mechanism.grab()
-                stage = Stage.GRABBING
-                stage_started = started
+                runtime.servos.catch.write(GRAB_CATCH_ANGLE)
+                stage = Stage.GRAB
+                move_started = loop_started
+
+            # □: catchだけを排出角度へ動かす。
             elif state.was_pressed(Button.SQUARE):
-                mechanism.release()
-                stage = Stage.RELEASING
-                stage_started = started
+                runtime.servos.catch.write(RELEASE_CATCH_ANGLE)
+                stage = Stage.RELEASE
+                move_started = loop_started
 
-            # 発射姿勢はcatchを排出角度、liftを発射高さへ同時に動かす。
+            # △: 前のmotiage.pyと同じ順番で、1つ目のlift移動を始める。
             elif state.was_pressed(Button.TRIANGLE):
-                # 編集する順番は motiage.py の steps だけ。
-                if not motiage.steps:
-                    raise ValueError("motiage.py の steps が空です。最低1行は書いてください")
-                motiage_step_index = 0
-                start_motiage_step()
-                enter(Stage.MOTIAGE)
+                runtime.servos.lift.write(LIFT_FIRST_ANGLE)
+                stage = Stage.LIFT_FIRST
+                move_started = loop_started
+                reached_at = None
 
-            if stage is Stage.TRANSPORTING:
-                if runtime.ball_transport_pose_ready():
-                    stage = Stage.DRIBBLE
-                elif started - stage_started > cfg.mechanism_target_timeout_sec:
-                    stage = Stage.FAULT
-                    print("地面保持姿勢に到達しません。角度・PID・CAN通信を確認してください")
-            elif stage is Stage.GRABBING:
+            # 地面姿勢へ両方が到着した時だけ、スティック走行を許可する。
+            if stage is Stage.GROUND:
+                if runtime.servos.catch.is_at_target() and runtime.servos.lift.is_at_target():
+                    stage = Stage.DRIVE
+                elif loop_started - move_started > MOVE_TIMEOUT_SEC:
+                    print("地面走行姿勢に到達しません。安全停止します")
+                    runtime.emergency_stop()
+                    break
+
+            # ○ / □ はcatchが目標へ着いたら待機へ戻る。
+            elif stage is Stage.GRAB or stage is Stage.RELEASE:
                 if runtime.servos.catch.is_at_target():
-                    stage = Stage.IDLE
-            elif stage is Stage.RELEASING:
-                if runtime.servos.catch.is_at_target():
-                    stage = Stage.IDLE
-            elif stage is Stage.MOTIAGE:
-                motor_name, angle = motiage.steps[motiage_step_index]
-                servo = getattr(runtime.servos, motor_name)
-                if ready_after_settle(reached(servo, float(angle)), started):
-                    motiage_step_index += 1
-                    if motiage_step_index == len(motiage.steps):
+                    stage = Stage.WAIT
+                elif loop_started - move_started > MOVE_TIMEOUT_SEC:
+                    print("catchが目標角度に到達しません。安全停止します")
+                    runtime.emergency_stop()
+                    break
+
+            # 以下は△の持上げ動作。1つずつ到着確認してから次の行を書く。
+            elif stage is Stage.LIFT_FIRST:
+                angle = runtime.servos.lift.read()
+                if angle is not None and abs(angle - LIFT_FIRST_ANGLE) <= TARGET_ERROR_DEG:
+                    if reached_at is None:
+                        reached_at = loop_started
+                    elif loop_started - reached_at >= SETTLE_TIME_SEC:
+                        runtime.servos.catch.write(CATCH_GRAB_ANGLE)
+                        stage = Stage.CATCH_GRAB
+                        move_started = loop_started
+                        reached_at = None
+                else:
+                    reached_at = None
+
+            elif stage is Stage.CATCH_GRAB:
+                angle = runtime.servos.catch.read()
+                if angle is not None and abs(angle - CATCH_GRAB_ANGLE) <= TARGET_ERROR_DEG:
+                    if reached_at is None:
+                        reached_at = loop_started
+                    elif loop_started - reached_at >= SETTLE_TIME_SEC:
+                        runtime.servos.lift.write(LIFT_AFTER_GRAB_ANGLE)
+                        stage = Stage.LIFT_AFTER_GRAB
+                        move_started = loop_started
+                        reached_at = None
+                else:
+                    reached_at = None
+
+            elif stage is Stage.LIFT_AFTER_GRAB:
+                angle = runtime.servos.lift.read()
+                if angle is not None and abs(angle - LIFT_AFTER_GRAB_ANGLE) <= TARGET_ERROR_DEG:
+                    if reached_at is None:
+                        reached_at = loop_started
+                    elif loop_started - reached_at >= SETTLE_TIME_SEC:
+                        runtime.servos.catch.write(CATCH_RELEASE_ANGLE)
+                        stage = Stage.CATCH_RELEASE
+                        move_started = loop_started
+                        reached_at = None
+                else:
+                    reached_at = None
+
+            elif stage is Stage.CATCH_RELEASE:
+                angle = runtime.servos.catch.read()
+                if angle is not None and abs(angle - CATCH_RELEASE_ANGLE) <= TARGET_ERROR_DEG:
+                    if reached_at is None:
+                        reached_at = loop_started
+                    elif loop_started - reached_at >= SETTLE_TIME_SEC:
+                        runtime.servos.lift.write(LIFT_FIRE_ANGLE)
+                        stage = Stage.LIFT_FIRE
+                        move_started = loop_started
+                        reached_at = None
+                else:
+                    reached_at = None
+
+            elif stage is Stage.LIFT_FIRE:
+                angle = runtime.servos.lift.read()
+                if angle is not None and abs(angle - LIFT_FIRE_ANGLE) <= TARGET_ERROR_DEG:
+                    if reached_at is None:
+                        reached_at = loop_started
+                    elif loop_started - reached_at >= SETTLE_TIME_SEC:
                         if runtime.solenoid is None:
                             raise RuntimeError("ソレノイドが開かれていません")
-                        solenoid.fire(runtime.solenoid)
+                        runtime.solenoid.pulse(SOLENOID_ON_TIME_SEC)
                         print("持上げ完了: ソレノイド ON")
                         stage = Stage.FIRED
-                    else:
-                        start_motiage_step()
-                        # 各行ごとに最大待機時間を数え直す。
-                        enter(Stage.MOTIAGE)
+                else:
+                    reached_at = None
 
+            # 持上げ途中で1つの角度に着かなければ、安全停止する。
             if stage in {
-                Stage.MOTIAGE,
-            } and started - stage_started > cfg.mechanism_target_timeout_sec:
-                stage = Stage.FAULT
-                motor_name, angle = motiage.steps[motiage_step_index]
-                servo = getattr(runtime.servos, motor_name)
-                print(
-                    "連続動作が目標角度に到達しません。 "
-                    f"{motor_name}={servo.read()}度 target={angle}度"
-                )
+                Stage.LIFT_FIRST,
+                Stage.CATCH_GRAB,
+                Stage.LIFT_AFTER_GRAB,
+                Stage.CATCH_RELEASE,
+                Stage.LIFT_FIRE,
+            } and loop_started - move_started > MOVE_TIMEOUT_SEC:
+                print("持上げが目標角度に到達しません。安全停止します")
+                runtime.emergency_stop()
+                break
 
-            # 暴走防止: 中立付近のスティックずれは無視し、停止フレームを連続送信する。
-            if stage is Stage.DRIBBLE:
+            # 地面走行姿勢に着いたときだけ、手動でメカナムを動かせる。
+            if stage is Stage.DRIVE:
                 command = runtime.manual_command(state)
-                if state.left_stick.magnitude < cfg.manual_stick_deadzone:
+                if state.left_stick.magnitude < STICK_DEADZONE:
                     command = MotionCommand(rotate=command.rotate)
-                if state.right_stick.magnitude < cfg.manual_stick_deadzone:
+                if state.right_stick.magnitude < STICK_DEADZONE:
                     command = MotionCommand(forward=command.forward, strafe=command.strafe)
                 if command == MotionCommand.stop():
                     runtime.mecanum.stop()
                 else:
                     runtime.mecanum.drive(command)
             else:
+                # 機構を動かす間・待機中・発射後は必ず車輪を止め続ける。
                 runtime.mecanum.stop()
+
             runtime.update_outputs()
 
-            if stage is not previous_stage:
+            if stage is not shown_stage:
                 print(f"[{stage.value}]")
-                previous_stage = stage
-            time.sleep(max(0.0, 1.0 / 50.0 - (time.monotonic() - started)))
+                shown_stage = stage
+
+            time.sleep(max(0.0, 1.0 / 50.0 - (time.monotonic() - loop_started)))
+
     except KeyboardInterrupt:
-        pass
+        if runtime is not None:
+            runtime.emergency_stop()
     finally:
+        # エラー、Ctrl+C、OPTIONS、通常終了の全てで停止してから閉じる。
         if runtime is not None:
             runtime.close()
 
