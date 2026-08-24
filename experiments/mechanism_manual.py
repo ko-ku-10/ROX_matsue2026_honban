@@ -1,7 +1,7 @@
 import time
 
 import hensuu
-from rox_mecanum import Button, PygameDualSense
+from rox_mecanum import Button, open_configured_dualsense
 from servos import open_servos
 
 # 機構の角度
@@ -12,7 +12,7 @@ sage = -100
 basyo = "原点"
 
 servos = open_servos()
-controller = PygameDualSense.open()
+controller = open_configured_dualsense()
 
 try:
     # 起動時に1回だけ原点を登録する

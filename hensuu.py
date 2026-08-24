@@ -4,6 +4,12 @@
 serial_port = "/dev/ttyUSB0"
 serial_baud = 921600
 
+# DualSenseはプログラム起動時だけBluetooth接続し、終了時に切断する。
+# ペアリング済みDualSenseのMACアドレス。違うコントローラーを使う時だけ変更する。
+dualsense_mac_address = "0C:27:56:31:25:90"
+dualsense_connect_timeout_sec = 30.0
+dualsense_disconnect_on_close = True
+
 # メカナム
 mecanum_speed_percent = 100       # 最高速度（0〜100）
 mecanum_rotation_requires_r2 = True

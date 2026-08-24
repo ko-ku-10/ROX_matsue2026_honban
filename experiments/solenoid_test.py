@@ -3,13 +3,13 @@
 import time
 
 import hensuu
-from rox_mecanum import Button, PygameDualSense
+from rox_mecanum import Button, open_configured_dualsense
 from rox_mecanum.solenoid import RDKSolenoid
 
 
 def main() -> None:
     solenoid = RDKSolenoid(hensuu.solenoid_pin)
-    controller = PygameDualSense.open()
+    controller = open_configured_dualsense()
     was_pressed = False
     print("L2: ソレノイド  /  OPTIONS: 終了")
     try:

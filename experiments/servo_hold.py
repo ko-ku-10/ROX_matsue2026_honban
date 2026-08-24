@@ -2,11 +2,11 @@
 
 import time
 
-from rox_mecanum import Button, PygameDualSense
+from rox_mecanum import Button, open_configured_dualsense
 from servos import open_servos
 
 servos = open_servos()
-controller = PygameDualSense.open()
+controller = open_configured_dualsense()
 
 try:
     # 停止状態で有効化し、RobStrideから読んだ現在角度を0度として登録する。

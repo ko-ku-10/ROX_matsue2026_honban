@@ -11,6 +11,7 @@ from .controller import (
     ControllerProfile,
     ControllerState,
     PygameDualSense,
+    open_configured_dualsense,
 )
 from .mecanum import (
     DualSenseMotionMapping,
@@ -63,6 +64,7 @@ __all__ = [
     "MotionCommand",
     "PySerialTransport",
     "PygameDualSense",
+    "open_configured_dualsense",
     "TimedServo",
     "TimedServoConfig",
     "ATEncoderReader",

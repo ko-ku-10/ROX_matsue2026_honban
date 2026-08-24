@@ -7,7 +7,7 @@ from time import monotonic
 
 import hensuu
 
-from .controller import Button, PygameDualSense
+from .controller import Button, PygameDualSense, open_configured_dualsense
 from .mecanum import DualSenseMotionMapping, MecanumMixer, MotionCommand
 from .serial_at import AT_NEUTRAL_VALUE, MecanumRobot, PySerialTransport
 from .solenoid import RDKSolenoid
@@ -34,7 +34,7 @@ class RobotRuntime:
         """モーターを安全停止状態で有効化し、サーボPIDを起動する。"""
         from servos import open_servos
 
-        controller = PygameDualSense.open()
+        controller = open_configured_dualsense()
         transport = PySerialTransport.open(hensuu.serial_port, hensuu.serial_baud, minimum_interval=0.0008)
         mecanum = MecanumRobot(
             transport,

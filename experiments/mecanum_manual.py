@@ -23,7 +23,7 @@ from rox_mecanum import (
     MecanumMixer,
     MecanumRobot,
     PySerialTransport,
-    PygameDualSense,
+    open_configured_dualsense,
 )
 
 
@@ -57,7 +57,7 @@ def main() -> None:
             print("  右スティック左右: 旋回")
         print("  OPTIONS: 停止して終了")
 
-        controller = PygameDualSense.open()
+        controller = open_configured_dualsense()
         transport = PySerialTransport.open(
             hensuu.serial_port,
             baudrate=hensuu.serial_baud,

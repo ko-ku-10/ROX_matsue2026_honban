@@ -9,8 +9,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
 from math import atan2, degrees, hypot
-from time import monotonic
+from time import monotonic, sleep
 from typing import Mapping
+import subprocess
 
 
 class Button(str, Enum):
@@ -204,18 +205,31 @@ class PygameDualSense:
     ハードウェアを持たないテストでは ``ControllerState`` を直接作ればよい。
     """
 
-    def __init__(self, joystick: object, profile: ControllerProfile = DEFAULT_PYGAME_PROFILE):
+    def __init__(
+        self,
+        joystick: object,
+        profile: ControllerProfile = DEFAULT_PYGAME_PROFILE,
+        *,
+        bluetooth_address: str = "",
+        disconnect_on_close: bool = False,
+    ):
         self._joystick = joystick
         self.profile = profile
         self._previous_buttons: frozenset[Button] = frozenset()
+        self._bluetooth_address = bluetooth_address.strip()
+        self._disconnect_on_close = bool(disconnect_on_close)
 
     @classmethod
     def open(
         cls,
         index: int = 0,
         profile: ControllerProfile = DEFAULT_PYGAME_PROFILE,
+        *,
+        bluetooth_address: str = "",
+        connect_timeout_sec: float = 0.0,
+        disconnect_on_close: bool = False,
     ) -> "PygameDualSense":
-        """pygame の指定ジョイスティックを開く。pygame はここでだけ import する。"""
+        """pygameの指定ジョイスティックを開く。必要ならBluetooth接続も試す。"""
         try:
             import pygame
         except ImportError as error:  # pragma: no cover - 実機依存
@@ -223,11 +237,27 @@ class PygameDualSense:
 
         pygame.init()
         pygame.joystick.init()
-        if not 0 <= index < pygame.joystick.get_count():
-            raise RuntimeError(f"controller index {index} is unavailable")
+        address = bluetooth_address.strip()
+        deadline = monotonic() + max(0.0, float(connect_timeout_sec))
+        attempted_connect = False
+        while not 0 <= index < pygame.joystick.get_count():
+            if address and not attempted_connect:
+                attempted_connect = True
+                print("DualSenseへBluetooth接続を試します。PSボタンを押してください。")
+                cls._bluetooth_connect(address)
+            if monotonic() >= deadline:
+                raise RuntimeError(f"controller index {index} is unavailable")
+            sleep(0.5)
+            pygame.joystick.quit()
+            pygame.joystick.init()
         joystick = pygame.joystick.Joystick(index)
         joystick.init()
-        return cls(joystick, profile)
+        return cls(
+            joystick,
+            profile,
+            bluetooth_address=address,
+            disconnect_on_close=disconnect_on_close,
+        )
 
     @property
     def name(self) -> str:
@@ -270,8 +300,39 @@ class PygameDualSense:
         return state
 
     def close(self) -> None:
-        """このジョイスティックを閉じる。pygame 全体は終了しない。"""
-        self._joystick.quit()
+        """入力を閉じ、設定時はDualSenseをBluetooth切断して電池を節約する。"""
+        try:
+            self._joystick.quit()
+        finally:
+            if self._disconnect_on_close and self._bluetooth_address:
+                self._bluetooth_disconnect(self._bluetooth_address)
+
+    @staticmethod
+    def _bluetooth_connect(address: str) -> None:
+        try:
+            subprocess.run(
+                ["bluetoothctl", "connect", address],
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+        except (OSError, subprocess.SubprocessError):
+            # pygameで既に見えている場合もあるので、ここでは接続失敗を確定しない。
+            pass
+
+    @staticmethod
+    def _bluetooth_disconnect(address: str) -> None:
+        try:
+            subprocess.run(
+                ["bluetoothctl", "disconnect", address],
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+        except (OSError, subprocess.SubprocessError):
+            pass
 
     def _read_dpad(self) -> dict[Button, bool]:
         if self.profile.dpad_hat is None:
@@ -302,3 +363,14 @@ def _clip(value: float) -> float:
 
 def _unit(value: float) -> float:
     return max(0.0, min(1.0, float(value)))
+
+
+def open_configured_dualsense() -> PygameDualSense:
+    """hensuu.pyのBluetooth設定を使い、DualSenseを開く。"""
+    import hensuu
+
+    return PygameDualSense.open(
+        bluetooth_address=hensuu.dualsense_mac_address,
+        connect_timeout_sec=hensuu.dualsense_connect_timeout_sec,
+        disconnect_on_close=hensuu.dualsense_disconnect_on_close,
+    )

@@ -9,7 +9,7 @@ from __future__ import annotations
 import time
 
 import hensuu
-from rox_mecanum import Button, PygameDualSense
+from rox_mecanum import Button, open_configured_dualsense
 from servos import open_servos
 
 
@@ -18,7 +18,7 @@ def main() -> None:
     controller = None
     try:
         servos = open_servos()
-        controller = PygameDualSense.open()
+        controller = open_configured_dualsense()
 
         servos.attach()
         print("liftを現在の地面高さ（0度）に合わせてから Enter を押してください")
