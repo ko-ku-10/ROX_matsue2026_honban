@@ -2,7 +2,7 @@
 
 # △で開始するGAME3連続動作の角度。
 # 各段階はエンコーダー到達確認後に次へ進む。実機に合わせて調整する。
-sequence_lift_first_angle = 110.0
+sequence_lift_first_angle = 110
 sequence_catch_grab_angle = -70.0
 sequence_lift_after_grab_angle = 20.0
 sequence_catch_release_angle = 0.0
