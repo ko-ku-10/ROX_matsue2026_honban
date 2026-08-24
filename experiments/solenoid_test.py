@@ -19,9 +19,9 @@ def main() -> None:
                 break
             pressed = state.button(Button.L2)
             if pressed and not was_pressed:
-                solenoid.on()
-                time.sleep(hensuu.solenoid_time_sec)
                 solenoid.off()
+                time.sleep(hensuu.solenoid_time_sec)
+                solenoid.on()
             was_pressed = pressed
             time.sleep(0.02)
     finally:
