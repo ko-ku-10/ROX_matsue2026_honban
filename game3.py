@@ -5,7 +5,7 @@
 左スティック: メカナム移動 / R2 + 右スティック: 旋回
 CREATE: ボールを地面に付けた走行姿勢
 ○: catchを掴む角度 / □: catchをRobot外へ出す角度
-△: 発射姿勢へ持上げ / L2: 発射 / ×: 地面走行姿勢へ戻す
+△: 掴む→持上げ→ソレノイド発射の連続動作 / ×: 地面走行姿勢へ戻す
 R1: ソレノイド単体テスト
 OPTIONS: 非常停止して終了
 """
@@ -26,8 +26,11 @@ class Stage(str, Enum):
     DRIBBLE = "ドリブル走行可能"
     GRABBING = "catchを掴む角度へ移動中"
     RELEASING = "catchを排出角度へ移動中"
-    RAISING = "発射姿勢へ持上げ中"
-    READY_TO_FIRE = "L2で発射可能"
+    LIFT_FIRST = "liftを110度へ移動中"
+    CATCH_GRAB = "catchを-70度へ移動中"
+    LIFT_AFTER_GRAB = "liftを20度へ移動中"
+    CATCH_RELEASE = "catchを0度へ移動中"
+    LIFT_FIRE = "liftを110度へ移動中（発射準備）"
     FIRED = "発射済み: ×で地面姿勢へ戻す"
     FAULT = "安全停止"
 
@@ -41,6 +44,11 @@ def main() -> None:
         stage = Stage.IDLE
         stage_started = time.monotonic()
         previous_stage = None
+
+        def enter(next_stage: Stage) -> None:
+            nonlocal stage, stage_started
+            stage = next_stage
+            stage_started = time.monotonic()
 
         while True:
             started = time.monotonic()
@@ -73,13 +81,9 @@ def main() -> None:
 
             # 発射姿勢はcatchを排出角度、liftを発射高さへ同時に動かす。
             elif state.was_pressed(Button.TRIANGLE):
-                if cfg.lift_fire_angle is None:
-                    stage = Stage.FAULT
-                    print("game3_hensuu.py の lift_fire_angle を実測値に設定してください")
-                else:
-                    mechanism.fire_pose(cfg.lift_fire_angle)
-                    stage = Stage.RAISING
-                    stage_started = started
+                # 前のmotiage.pyで作った順番を、待ち時間ではなく実測角度で進める。
+                runtime.servos.lift.write(cfg.sequence_lift_first_angle)
+                enter(Stage.LIFT_FIRST)
 
             if stage is Stage.TRANSPORTING:
                 if runtime.ball_transport_pose_ready():
@@ -93,16 +97,32 @@ def main() -> None:
             elif stage is Stage.RELEASING:
                 if runtime.servos.catch.is_at_target():
                     stage = Stage.IDLE
-            elif stage is Stage.RAISING:
-                if mechanism.fire_ready():
-                    stage = Stage.READY_TO_FIRE
-                elif started - stage_started > cfg.mechanism_target_timeout_sec:
-                    stage = Stage.FAULT
-                    print("発射姿勢に到達しません。角度・PID・CAN通信を確認してください")
-            elif stage is Stage.READY_TO_FIRE and state.was_pressed(Button.L2):
+            elif stage is Stage.LIFT_FIRST and runtime.servos.lift.is_at_target():
+                runtime.servos.catch.write(cfg.sequence_catch_grab_angle)
+                enter(Stage.CATCH_GRAB)
+            elif stage is Stage.CATCH_GRAB and runtime.servos.catch.is_at_target():
+                runtime.servos.lift.write(cfg.sequence_lift_after_grab_angle)
+                enter(Stage.LIFT_AFTER_GRAB)
+            elif stage is Stage.LIFT_AFTER_GRAB and runtime.servos.lift.is_at_target():
+                runtime.servos.catch.write(cfg.sequence_catch_release_angle)
+                enter(Stage.CATCH_RELEASE)
+            elif stage is Stage.CATCH_RELEASE and runtime.servos.catch.is_at_target():
+                runtime.servos.lift.write(cfg.lift_fire_angle)
+                enter(Stage.LIFT_FIRE)
+            elif stage is Stage.LIFT_FIRE and runtime.servos.lift.is_at_target():
                 runtime.fire()
-                print("発射")
+                print("発射: ソレノイド ON")
                 stage = Stage.FIRED
+
+            if stage in {
+                Stage.LIFT_FIRST,
+                Stage.CATCH_GRAB,
+                Stage.LIFT_AFTER_GRAB,
+                Stage.CATCH_RELEASE,
+                Stage.LIFT_FIRE,
+            } and started - stage_started > cfg.mechanism_target_timeout_sec:
+                stage = Stage.FAULT
+                print("連続動作が目標角度に到達しません。角度・PID・CAN通信を確認してください")
 
             # 暴走防止: 中立付近のスティックずれは無視し、停止フレームを連続送信する。
             if stage is Stage.DRIBBLE:
