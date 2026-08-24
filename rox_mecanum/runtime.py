@@ -7,6 +7,7 @@ from time import monotonic
 
 import hensuu
 
+from .ball_mechanism import set_transport_pose, transport_pose_ready
 from .controller import Button, PygameDualSense, open_configured_dualsense
 from .mecanum import DualSenseMotionMapping, MecanumMixer, MotionCommand
 from .serial_at import AT_NEUTRAL_VALUE, MecanumRobot, PySerialTransport
@@ -79,12 +80,11 @@ class RobotRuntime:
 
     def set_ball_transport_pose(self) -> None:
         """ボールを地面に付けて保持したまま移動する共通姿勢にする。"""
-        self.servos.catch.write(hensuu.catch_ball_hold_angle)
-        self.servos.lift.write(hensuu.lift_ball_ground_angle)
+        set_transport_pose(self.servos)
 
     def ball_transport_pose_ready(self) -> bool:
         """地面保持姿勢へ両方の機構が到達した時だけTrue。"""
-        return self.servos.catch.is_at_target() and self.servos.lift.is_at_target()
+        return transport_pose_ready(self.servos)
 
     def fire(self) -> None:
         if self.solenoid is None:

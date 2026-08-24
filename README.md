@@ -45,7 +45,7 @@ cd ~/Desktop/honban/ROX_matsue2026_honban
 # メカナム手動走行だけ
 python3 -m experiments.mecanum_manual
 
-# catch / lift の動作だけ
+# GAME3と同じcatch / lift姿勢だけを確認
 python3 -m experiments.mechanism_manual
 
 # liftだけを低速で持上げ確認（△: 持上げ / ×: 戻す / OPTIONS: 停止）

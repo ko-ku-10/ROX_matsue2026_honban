@@ -1,66 +1,62 @@
+"""GAME3と同じcatch/lift姿勢を単体確認する実験プログラム。
+
+実行: python3 -m experiments.mechanism_manual
+CREATE: 地面保持 / ○: 掴む / □: 排出 / △: 発射姿勢 / ×: 地面保持 / OPTIONS: 終了
+"""
+
+from __future__ import annotations
+
 import time
 
+import game3_hensuu as cfg
 import hensuu
 from rox_mecanum import Button, open_configured_dualsense
+from rox_mecanum.ball_mechanism import set_fire_pose, set_grab_pose, set_release_pose, set_transport_pose
 from servos import open_servos
 
-# 機構の角度
-hiraki = 20  
-tozi = 10    
-age = -10    
-sage = -100  
-basyo = "原点"
 
-servos = open_servos()
-controller = open_configured_dualsense()
+def main() -> None:
+    servos = None
+    controller = None
+    try:
+        servos = open_servos()
+        controller = open_configured_dualsense()
+        servos.attach()
+        print("catch/liftを現在の0度位置へ合わせてから Enter を押してください")
+        input()
+        servos.home_from_feedback()
+        servos.set_pid("catch", max_speed_percent=hensuu.mechanism_move_speed_percent)
+        servos.set_pid("lift", max_speed_percent=hensuu.mechanism_move_speed_percent)
+        servos.hold_all_current()
+        servos.start_pid()
 
-try:
-    # 起動時に1回だけ原点を登録する
-    servos.attach()
-    servos.home_from_feedback()
-    # PID保持用の低速設定とは別に、目標角度へ動かす時だけ速度を上げる。
-    servos.set_pid("catch", max_speed_percent=hensuu.mechanism_move_speed_percent)
-    servos.set_pid("lift", max_speed_percent=hensuu.mechanism_move_speed_percent)
-    # start_pid()だけではPID保持は有効にならないため、現在位置を目標にする。
-    servos.hold_all_current()
-    servos.start_pid()  # PID保持を自動で開始する
-
-    while True:
-        state = controller.read()
-
-        if state.buttons[Button.CREATE]:
-            if basyo == "原点":
-                servos.catch.write(0)
-                servos.lift.write(110)
-                print("下に移動")
-                time.sleep(3.0)
-                basyo = "下"
-            
-            elif basyo == "下":
-                servos.catch.write(0)
-                servos.lift.write(0)
-                print("原点に移動")
-                time.sleep(3.0)
-                basyo = "原点"
-                
-        if state.buttons[Button.TRIANGLE]:
-            print("掴みます")
-            servos.lift.write(110)
-            time.sleep(3.0)
-            
-            servos.catch.write(-70)
-            time.sleep(2.0)
-
-            servos.lift.write(20)
-            time.sleep(3.0)
-
-            servos.catch.write(0)
-            time.sleep(2.0)
+        print("CREATE/×: 地面保持  ○: 掴む  □: 排出  △: 発射姿勢  OPTIONS: 停止")
+        while True:
+            state = controller.read()
+            if state.was_pressed(Button.OPTIONS):
+                break
+            if state.was_pressed(Button.CREATE) or state.was_pressed(Button.CROSS):
+                set_transport_pose(servos)
+                print("地面保持姿勢")
+            elif state.was_pressed(Button.CIRCLE):
+                set_grab_pose(servos)
+                print("掴む姿勢")
+            elif state.was_pressed(Button.SQUARE):
+                set_release_pose(servos)
+                print("排出姿勢")
+            elif state.was_pressed(Button.TRIANGLE):
+                if cfg.lift_fire_angle is None:
+                    print("game3_hensuu.py の lift_fire_angle を設定してください")
+                else:
+                    set_fire_pose(servos, cfg.lift_fire_angle)
+                    print(f"発射姿勢: lift={cfg.lift_fire_angle}度")
+            time.sleep(0.02)
+    finally:
+        if servos is not None:
+            servos.close()
+        if controller is not None:
+            controller.close()
 
 
-
-        time.sleep(0.02)
-
-finally:
-    servos.close()
-    controller.close()
+if __name__ == "__main__":
+    main()

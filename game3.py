@@ -15,8 +15,8 @@ import time
 from enum import Enum
 
 import game3_hensuu as cfg
-import hensuu
 from rox_mecanum import Button, MotionCommand, RobotRuntime
+from rox_mecanum.ball_mechanism import fire_pose_ready, set_fire_pose, set_grab_pose, set_release_pose
 
 
 class Stage(str, Enum):
@@ -55,11 +55,11 @@ def main() -> None:
 
             # catch角度の単体確認。機構が動く間は車輪を止める。
             elif state.was_pressed(Button.CIRCLE):
-                runtime.servos.catch.write(hensuu.catch_ball_grab_angle)
+                set_grab_pose(runtime.servos)
                 stage = Stage.GRABBING
                 stage_started = started
             elif state.was_pressed(Button.SQUARE):
-                runtime.servos.catch.write(hensuu.catch_ball_release_angle)
+                set_release_pose(runtime.servos)
                 stage = Stage.RELEASING
                 stage_started = started
 
@@ -69,8 +69,7 @@ def main() -> None:
                     stage = Stage.FAULT
                     print("game3_hensuu.py の lift_fire_angle を実測値に設定してください")
                 else:
-                    runtime.servos.catch.write(hensuu.catch_ball_release_angle)
-                    runtime.servos.lift.write(cfg.lift_fire_angle)
+                    set_fire_pose(runtime.servos, cfg.lift_fire_angle)
                     stage = Stage.RAISING
                     stage_started = started
 
@@ -87,7 +86,7 @@ def main() -> None:
                 if runtime.servos.catch.is_at_target():
                     stage = Stage.IDLE
             elif stage is Stage.RAISING:
-                if runtime.servos.catch.is_at_target() and runtime.servos.lift.is_at_target():
+                if fire_pose_ready(runtime.servos):
                     stage = Stage.READY_TO_FIRE
                 elif started - stage_started > cfg.mechanism_target_timeout_sec:
                     stage = Stage.FAULT
