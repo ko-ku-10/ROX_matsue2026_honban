@@ -49,8 +49,9 @@ class RobotRuntime:
         try:
             mecanum.enable_all(retries=3, interval=0.05)
             servos.attach()
-            print("catch/liftを機械的な0度へ合わせてから Enter を押してください")
-            input()
+            # 本番では操縦者のEnter確認を待たない。起動時の実測角度を0度として登録する。
+            # 機構は起動前に、あらかじめ決めた開始姿勢へ置いておく。
+            print("catch/liftの現在角度を起動時の0度として自動登録します")
             servos.home_from_feedback()
             # start_pid() は更新スレッドを始めるだけで保持はオンにしない。
             # 原点登録した現在位置を明示的に目標にしてから開始する。

@@ -1,5 +1,8 @@
 """GAME3と同じcatch/lift姿勢を単体確認する実験プログラム。
 
+角度は hensuu.py / game3_hensuu.py、動作の共通処理は
+rox_mecanum/ball_mechanism.py にある。ここだけを編集してもGAME3には反映されない。
+
 実行: python3 -m experiments.mechanism_manual
 CREATE: 地面保持 / ○: 掴む / □: 排出 / △: 発射姿勢 / ×: 地面保持 / OPTIONS: 終了
 """
