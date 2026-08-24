@@ -63,8 +63,9 @@ def main() -> None:
                 runtime.fire()
                 print("ソレノイド単体テスト: ON")
 
-            # 走行姿勢へ戻す。catch/liftが両方到達するまで車輪は停止する。
-            if state.was_pressed(Button.CREATE) or (stage is Stage.FIRED and state.was_pressed(Button.CROSS)):
+            # CREATE/×はいつでも連続動作を中止し、走行姿勢へ戻す。
+            # catch/liftが両方到達するまで車輪は停止する。
+            if state.was_pressed(Button.CREATE) or state.was_pressed(Button.CROSS):
                 runtime.set_ball_transport_pose()
                 stage = Stage.TRANSPORTING
                 stage_started = started
