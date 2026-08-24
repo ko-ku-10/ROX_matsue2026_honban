@@ -81,4 +81,3 @@ dashboard_port = 8000
 
 # ソレノイド
 solenoid_pin = 27
-solenoid_time_sec = 0.3

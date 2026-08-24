@@ -87,7 +87,10 @@ class RobotRuntime:
     def fire(self) -> None:
         if self.solenoid is None:
             raise RuntimeError("このゲームではソレノイドを使いません")
-        self.solenoid.pulse(hensuu.solenoid_time_sec)
+        # 初心者が動作を書き換える solenoid.py と同じ処理を使う。
+        import solenoid
+
+        solenoid.fire(self.solenoid)
 
     def update_outputs(self) -> None:
         if self.solenoid is not None:

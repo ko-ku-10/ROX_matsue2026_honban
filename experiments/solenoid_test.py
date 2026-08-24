@@ -3,12 +3,13 @@
 import time
 
 import hensuu
+import solenoid
 from rox_mecanum import Button, open_configured_dualsense
 from rox_mecanum.solenoid import RDKSolenoid
 
 
 def main() -> None:
-    solenoid = RDKSolenoid(hensuu.solenoid_pin)
+    output = RDKSolenoid(hensuu.solenoid_pin)
     controller = open_configured_dualsense()
     was_pressed = False
     print("L2: ソレノイド  /  OPTIONS: 終了")
@@ -19,14 +20,14 @@ def main() -> None:
                 break
             pressed = state.button(Button.L2)
             if pressed and not was_pressed:
-                # GAME2/GAME3の RobotRuntime.fire() と同じ共通処理。
-                solenoid.pulse(hensuu.solenoid_time_sec)
-                print(f"ソレノイド ON ({hensuu.solenoid_time_sec}秒)")
+                # GAME2/GAME3と同じ solenoid.py の処理。
+                solenoid.fire(output)
+                print(f"ソレノイド ON ({solenoid.on_time_sec}秒)")
             was_pressed = pressed
-            solenoid.update()
+            output.update()
             time.sleep(0.02)
     finally:
-        solenoid.close()
+        output.close()
         controller.close()
 
 

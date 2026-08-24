@@ -16,6 +16,8 @@ import time
 from enum import Enum
 
 import game3_hensuu as cfg
+import motiage
+import solenoid
 from rox_mecanum import Button, MotionCommand, RobotRuntime
 from rox_mecanum import BallMechanism
 
@@ -67,11 +69,11 @@ def main() -> None:
 
         def start_motiage_step() -> None:
             """game3_hensuu.pyの1行を実行する。安全な到達確認は下で行う。"""
-            motor_name, angle = cfg.motiage_steps[motiage_step_index]
+            motor_name, angle = motiage.steps[motiage_step_index]
             if motor_name not in {"lift", "catch"}:
-                raise ValueError("motiage_stepsのモーター名は 'lift' または 'catch' にしてください")
+                raise ValueError("motiage.py のモーター名は 'lift' または 'catch' にしてください")
             getattr(runtime.servos, motor_name).write(float(angle))
-            print(f"持上げ {motiage_step_index + 1}/{len(cfg.motiage_steps)}: {motor_name} -> {angle}度")
+            print(f"持上げ {motiage_step_index + 1}/{len(motiage.steps)}: {motor_name} -> {angle}度")
 
         while True:
             started = time.monotonic()
@@ -105,9 +107,9 @@ def main() -> None:
 
             # 発射姿勢はcatchを排出角度、liftを発射高さへ同時に動かす。
             elif state.was_pressed(Button.TRIANGLE):
-                # 編集する順番は game3_hensuu.py の motiage_steps だけ。
-                if not cfg.motiage_steps:
-                    raise ValueError("motiage_stepsが空です。最低1行は書いてください")
+                # 編集する順番は motiage.py の steps だけ。
+                if not motiage.steps:
+                    raise ValueError("motiage.py の steps が空です。最低1行は書いてください")
                 motiage_step_index = 0
                 start_motiage_step()
                 enter(Stage.MOTIAGE)
@@ -125,12 +127,14 @@ def main() -> None:
                 if runtime.servos.catch.is_at_target():
                     stage = Stage.IDLE
             elif stage is Stage.MOTIAGE:
-                motor_name, angle = cfg.motiage_steps[motiage_step_index]
+                motor_name, angle = motiage.steps[motiage_step_index]
                 servo = getattr(runtime.servos, motor_name)
                 if ready_after_settle(reached(servo, float(angle)), started):
                     motiage_step_index += 1
-                    if motiage_step_index == len(cfg.motiage_steps):
-                        runtime.fire()
+                    if motiage_step_index == len(motiage.steps):
+                        if runtime.solenoid is None:
+                            raise RuntimeError("ソレノイドが開かれていません")
+                        solenoid.fire(runtime.solenoid)
                         print("持上げ完了: ソレノイド ON")
                         stage = Stage.FIRED
                     else:
@@ -142,7 +146,7 @@ def main() -> None:
                 Stage.MOTIAGE,
             } and started - stage_started > cfg.mechanism_target_timeout_sec:
                 stage = Stage.FAULT
-                motor_name, angle = cfg.motiage_steps[motiage_step_index]
+                motor_name, angle = motiage.steps[motiage_step_index]
                 servo = getattr(runtime.servos, motor_name)
                 print(
                     "連続動作が目標角度に到達しません。 "

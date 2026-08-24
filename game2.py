@@ -7,6 +7,7 @@ from enum import Enum
 
 import camera_hensuu
 import game2_hensuu as cfg
+import solenoid
 from rox_mecanum import (
     AprilTagDetector,
     Button,
@@ -168,7 +169,9 @@ def main() -> None:
                         game.enter(Stage.FAULT)
                         game.error = "liftが発射高さに到達しません"
                 elif game.stage is Stage.READY_TO_FIRE and state.was_pressed(Button.L2):
-                    runtime.fire()
+                    if runtime.solenoid is None:
+                        raise RuntimeError("ソレノイドが開かれていません")
+                    solenoid.fire(runtime.solenoid)
                     game.enter(Stage.FIRED)
                 elif game.stage is Stage.FIRED and state.was_pressed(Button.CROSS):
                     runtime.set_ball_transport_pose()
