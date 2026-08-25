@@ -61,7 +61,7 @@ lift_test_up_angle = -10.0
 catch_counts_per_degree = 65536.0 / 360.0
 lift_counts_per_degree = 65536.0 / 360.0
 # 保持の反応。停止範囲を小さくしたため、弱すぎるP値では戻りが遅くなる。
-catch_pid_kp = 0.015
+catch_pid_kp = 0.035
 lift_pid_kp = 0.003
 # 重力などで同じ方向へずれ続ける場合に、少しずつ保持力を増やす。
 catch_pid_ki = 0.002
@@ -71,7 +71,7 @@ servo_pid_integral_limit = 30.0
 # 保持の初回確認は低速から。安定後に必要なら少しずつ上げる。
 # 1周期で1台ずつ読むため、200Hzなら各モーターは100Hzで実測角度を更新する。
 # ±0.2°を超えた直後から低速で戻す。力を受けた直後の位置ずれを小さくする。
-servo_max_speed_percent = 3.0
+servo_max_speed_percent = 8.0
 # mechanism_manual実験で目標角度へ動かす時だけ使う上限。保持用の3%とは分ける。
 mechanism_move_speed_percent = 10.0
 servo_tolerance_deg = 0.2
