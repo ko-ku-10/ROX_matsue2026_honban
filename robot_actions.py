@@ -18,6 +18,12 @@ except ImportError:  # pragma: no cover - RDK X5実機依存
 # ==================================================
 CYLINDER_EXTEND_PIN = 27
 CYLINDER_RETRACT_PIN = 17
+lift_orosu = 106
+lift_motiage = 30
+lift_stert
+catch_hozi = -38
+catch_machi = -17
+catch_tukamu = -45
 _configured_pins = set()
 
 
@@ -61,24 +67,24 @@ def close_gpio():
 
 def game1_start_pose(runtime):
     """GAME1: CREATEを押した時の開始姿勢。"""
-    servos.lift.write(110)
-    servos.catch.write(-30)
+    servos.lift.write(lift_orosu)
+    servos.catch.write(catch_hozi)
 
 
 def game2_ground_pose(runtime):
     """GAME2: 地面にボールを付けて走る姿勢。"""
-    servos.lift.write(110)
-    servos.catch.write(-30)
+    servos.lift.write(lift_orosu)
+    servos.catch.write(catch_hozi)
 
 def game2_lift_for_shot(runtime):
     """GAME2: 発射高さへliftを動かす。"""
-    servos.catch.write(-45)
+    servos.catch.write(catch_tukamu)
     time.sleep(0.5)
-    servos.lift.write(20)
+    servos.lift.write(lift_motiage)
     time.sleep(1)
-    servos.catch.write(-10)
+    servos.catch.write(catch_machi)
     time.sleep(0.5)
-    servos.lift.write(110)
+    servos.lift.write(lift_orosu)
 
 
 def game2_fire(runtime):
@@ -95,30 +101,42 @@ def game2_fire(runtime):
 
 def game3_ground_pose(runtime):
     """GAME3: 地面走行姿勢。"""
-    servos.lift.write(110)
-    servos.catch.write(0)
+    servos.lift.write(lift_orosu)
+    servos.catch.write(catch_machi)
 
 
 def game3_grab(runtime):
     """GAME3: ○を押した時の掴む動作。"""
-    servos.lift.write(110)
-    servos.catch.write()
+    servos.lift.write(lift_orosu)
+    servos.catch.write(catch_hozi)
 
 def game3_release(runtime):
     """GAME3: □を押した時の排出動作。"""
-    raise NotImplementedError("robot_actions.py の game3_release() を書いてください")
-
+    servos.lift.write(lift_orosu)
+    servos.catch.write(catch_machi)
 
 def game3_motiage(runtime):
     """GAME3: △を押した時の持上げ・発射までの全動作。"""
-    raise NotImplementedError("robot_actions.py の game3_motiage() を書いてください")
-
+    servos.lift.write(lift_orosu)
+    servos.catch.write(catch_tukamu)
+    time.sleep(0.5)
+    servos.lift.write(lift_motiage)
+    time.sleep(1)
+    servos.catch.write(catch_machi)
+    time.sleep(0.5)
+    servos.lift.write(lift_orosu)
 
 def game3_cylinder_extend(runtime):
     """GAME3: R1を押した時のシリンダーを伸ばす動作。"""
-    raise NotImplementedError("robot_actions.py の game3_cylinder_extend() を書いてください")
-
+    GPIO.output(17, GPIO.LOW)
+    GPIO.output(27, GPIO.HIGH)
+    time.sleep(0.05)
+    GPIO.output(27, GPIO.LOW)
+    GPIO.output(17, GPIO.HIGH)
+    time.sleep(0.05)
+    GPIO.output(17, GPIO.LOW)
+    GPIO.output(27, GPIO.LOW)
 
 def game3_cylinder_retract(runtime):
     """GAME3: L1を押した時のシリンダーを戻す動作。"""
-    raise NotImplementedError("robot_actions.py の game3_cylinder_retract() を書いてください")
+    
