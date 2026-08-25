@@ -20,10 +20,10 @@ CYLINDER_EXTEND_PIN = 27
 CYLINDER_RETRACT_PIN = 17
 lift_orosu = 106
 lift_motiage = 20
-catch_hozi = -38
+catch_hozi = -40
 catch_machi = -17
 # 地面で保持する角度とは別に、持上げ中にボールを保持できる角度。
-catch_motiage = -50
+catch_motiage = -45
 
 # 指令した角度へ届かない時に、永遠に待ち続けないための安全時間。
 # 動作完了の判定には使わず、エンコーダーの実測角度で判定する。
