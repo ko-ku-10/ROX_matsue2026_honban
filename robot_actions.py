@@ -23,6 +23,10 @@ lift_motiage = 30
 catch_hozi = -38
 catch_machi = -17
 catch_tukamu = -45
+
+# 指令した角度へ届かない時に、永遠に待ち続けないための安全時間。
+# 動作完了の判定には使わず、エンコーダーの実測角度で判定する。
+SERVO_MOVE_TIMEOUT_SEC = 8.0
 _configured_pins = set()
 
 
@@ -77,17 +81,47 @@ def game2_ground_pose(runtime):
     servos.lift.write(lift_orosu)
     servos.catch.write(catch_hozi)
 
+
+def wait_until_reached(servo, name):
+    """エンコーダー実測値が目標角度へ届くまで待つ。
+
+    ``time.sleep(1)`` のような固定時間では完了扱いにしない。
+    PIDスレッドが読むRobStrideのmechPosと目標角度との差が、設定した
+    許容誤差以内になった時だけ次の行へ進む。
+    """
+    deadline = time.monotonic() + SERVO_MOVE_TIMEOUT_SEC
+
+    while not servo.is_at_target():
+        if time.monotonic() >= deadline:
+            current = servo.read()
+            raise TimeoutError(
+                f"{name} が目標角度へ到達しません "
+                f"(現在: {current}, 目標: {servo.target_angle})"
+            )
+        time.sleep(0.02)
+
+    print(f"{name}: エンコーダーで到達を確認しました ({servo.read():.1f}度)")
+
+
 def ball_lift_for_shot(runtime):
     """GAME2・GAME3共通: ボールを発射する高さへ動かす。"""
     servos = runtime.servos
+
+    # 各行で目標を出し、エンコーダーが「届いた」と確認してから次へ進む。
     servos.lift.write(lift_orosu)
+    wait_until_reached(servos.lift, "liftを下ろす")
+
     servos.catch.write(catch_tukamu)
-    time.sleep(0.5)
+    wait_until_reached(servos.catch, "catchで掴む")
+
     servos.lift.write(lift_motiage)
-    time.sleep(1)
+    wait_until_reached(servos.lift, "liftで発射台へ運ぶ")
+
     servos.catch.write(catch_machi)
-    time.sleep(0.5)
+    wait_until_reached(servos.catch, "catchで発射台へ載せる")
+
     servos.lift.write(lift_orosu)
+    wait_until_reached(servos.lift, "liftを下ろす")
 
 
 def ball_fire(runtime):
