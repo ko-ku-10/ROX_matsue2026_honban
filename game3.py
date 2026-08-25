@@ -30,7 +30,7 @@ class Stage(str, Enum):
 
 
 def main() -> None:
-    print("GAME3: CREATE=地面姿勢 / ○=掴む / □=排出 / △=持上げ / R1=発射 / L1=戻す / OPTIONS=停止")
+    print("GAME3: CREATE=地面姿勢 / ○=掴む / □=排出 / △=持上げ / R1=発射 / OPTIONS=停止")
     runtime = None
 
     try:
@@ -52,11 +52,9 @@ def main() -> None:
                 runtime.emergency_stop()
                 break
 
-            # R1: GAME2と共通の発射動作。L1は単体でシリンダーを戻す。
+            # R1: GAME2と共通の「発射して戻す」動作。
             if state.was_pressed(Button.R1):
                 robot_actions.ball_fire(runtime)
-            if state.was_pressed(Button.L1):
-                robot_actions.game3_cylinder_retract(runtime)
 
             # CREATE または ×: 地面走行姿勢へ戻す。
             if state.was_pressed(Button.CREATE) or state.was_pressed(Button.CROSS):
