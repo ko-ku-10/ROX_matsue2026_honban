@@ -22,7 +22,8 @@ lift_orosu = 106
 lift_motiage = 30
 catch_hozi = -38
 catch_machi = -17
-catch_tukamu = -45
+# 地面で保持する角度とは別に、持上げ中にボールを保持できる角度。
+catch_motiage = -45
 
 # 指令した角度へ届かない時に、永遠に待ち続けないための安全時間。
 # 動作完了の判定には使わず、エンコーダーの実測角度で判定する。
@@ -111,9 +112,9 @@ def ball_lift_for_shot(runtime):
     servos.lift.write(lift_orosu)
     wait_until_reached(servos.lift, "liftを下ろす")
 
-    # すでに保持しているボールを、掴み直さずこの角度のまま運ぶ。
-    servos.catch.write(catch_hozi)
-    wait_until_reached(servos.catch, "catchで保持する")
+    # 持上げ用の角度にしてから、ボールを発射台へ運ぶ。
+    servos.catch.write(catch_motiage)
+    wait_until_reached(servos.catch, "catchを持上げ用の角度にする")
 
     servos.lift.write(lift_motiage)
     wait_until_reached(servos.lift, "liftで発射台へ運ぶ")
