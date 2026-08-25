@@ -91,6 +91,15 @@ def game2_ground_pose(runtime):
     servos.catch.write(catch_hozi)
 
 
+def is_within_move_tolerance(servo):
+    """現在の実測角度が、目標±3度に入っているかを返す。"""
+    current = servo.read()
+    return (
+        current is not None
+        and abs(servo.target_angle - current) <= SERVO_MOVE_TOLERANCE_DEG
+    )
+
+
 def wait_until_reached(servo, name):
     """エンコーダー実測値が目標±3度へ入るまで待つ。
 
@@ -102,14 +111,13 @@ def wait_until_reached(servo, name):
 
     while True:
         current = servo.read()
-        if current is not None:
+        if is_within_move_tolerance(servo):
             error = servo.target_angle - current
-            if abs(error) <= SERVO_MOVE_TOLERANCE_DEG:
-                print(
-                    f"{name}: エンコーダーで到達を確認しました "
-                    f"({current:.1f}度、誤差 {error:+.1f}度)"
-                )
-                return
+            print(
+                f"{name}: エンコーダーで到達を確認しました "
+                f"({current:.1f}度、誤差 {error:+.1f}度)"
+            )
+            return
 
         if time.monotonic() >= deadline:
             raise TimeoutError(
@@ -165,7 +173,7 @@ def game3_ground_pose(runtime):
     """GAME3: 地面走行姿勢。"""
     servos = runtime.servos
     servos.lift.write(lift_orosu)
-    servos.catch.write(catch_machi)
+    servos.catch.write(catch_hozi)
 
 
 def game3_grab(runtime):

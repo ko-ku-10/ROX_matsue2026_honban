@@ -81,7 +81,10 @@ def main() -> None:
 
             # 地面姿勢へ両方が到着した時だけ、スティック走行を許可する。
             if stage is Stage.GROUND:
-                if runtime.servos.catch.is_at_target() and runtime.servos.lift.is_at_target():
+                if (
+                    robot_actions.is_within_move_tolerance(runtime.servos.catch)
+                    and robot_actions.is_within_move_tolerance(runtime.servos.lift)
+                ):
                     stage = Stage.DRIVE
                 elif loop_started - move_started > MOVE_TIMEOUT_SEC:
                     print("地面走行姿勢に到達しません。安全停止します")
@@ -91,7 +94,7 @@ def main() -> None:
 
             # ○ / □ はcatchが目標へ着いたら待機へ戻る。
             elif stage is Stage.GRAB or stage is Stage.RELEASE:
-                if runtime.servos.catch.is_at_target():
+                if robot_actions.is_within_move_tolerance(runtime.servos.catch):
                     stage = Stage.WAIT
                 elif loop_started - move_started > MOVE_TIMEOUT_SEC:
                     print("catchが目標角度に到達しません。安全停止します")
