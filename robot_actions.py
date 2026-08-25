@@ -111,8 +111,9 @@ def ball_lift_for_shot(runtime):
     servos.lift.write(lift_orosu)
     wait_until_reached(servos.lift, "liftを下ろす")
 
-    servos.catch.write(catch_tukamu)
-    wait_until_reached(servos.catch, "catchで掴む")
+    # すでに保持しているボールを、掴み直さずこの角度のまま運ぶ。
+    servos.catch.write(catch_hozi)
+    wait_until_reached(servos.catch, "catchで保持する")
 
     servos.lift.write(lift_motiage)
     wait_until_reached(servos.lift, "liftで発射台へ運ぶ")
