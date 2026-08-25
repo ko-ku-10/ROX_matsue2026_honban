@@ -28,6 +28,10 @@ catch_motiage = -45
 # 指令した角度へ届かない時に、永遠に待ち続けないための安全時間。
 # 動作完了の判定には使わず、エンコーダーの実測角度で判定する。
 SERVO_MOVE_TIMEOUT_SEC = 8.0
+
+# 持上げ中だけ使うliftの強さ。大きくするほど速く強く動く。
+# 持上げ終了後は、hensuu.py の通常PID上限へ自動で戻る。
+LIFT_MOVE_SPEED_PERCENT = 20.0
 _configured_pins = set()
 
 
@@ -107,23 +111,31 @@ def wait_until_reached(servo, name):
 def ball_lift_for_shot(runtime):
     """GAME2・GAME3共通: ボールを発射する高さへ動かす。"""
     servos = runtime.servos
+    normal_lift_speed_percent = servos.lift.config.max_speed * 100.0
 
-    # 各行で目標を出し、エンコーダーが「届いた」と確認してから次へ進む。
-    servos.lift.write(lift_orosu)
-    wait_until_reached(servos.lift, "liftを下ろす")
+    # 持上げ中だけ強くする。通常のPID保持を強くし過ぎないため。
+    servos.set_pid("lift", max_speed_percent=LIFT_MOVE_SPEED_PERCENT)
 
-    # 持上げ用の角度にしてから、ボールを発射台へ運ぶ。
-    servos.catch.write(catch_motiage)
-    wait_until_reached(servos.catch, "catchを持上げ用の角度にする")
+    try:
+        # 各行で目標を出し、エンコーダーが「届いた」と確認してから次へ進む。
+        servos.lift.write(lift_orosu)
+        wait_until_reached(servos.lift, "liftを下ろす")
 
-    servos.lift.write(lift_motiage)
-    wait_until_reached(servos.lift, "liftで発射台へ運ぶ")
+        # 持上げ用の角度にしてから、ボールを発射台へ運ぶ。
+        servos.catch.write(catch_motiage)
+        wait_until_reached(servos.catch, "catchを持上げ用の角度にする")
 
-    servos.catch.write(catch_machi)
-    wait_until_reached(servos.catch, "catchで発射台へ載せる")
+        servos.lift.write(lift_motiage)
+        wait_until_reached(servos.lift, "liftで発射台へ運ぶ")
 
-    servos.lift.write(lift_orosu)
-    wait_until_reached(servos.lift, "liftを下ろす")
+        servos.catch.write(catch_machi)
+        wait_until_reached(servos.catch, "catchで発射台へ載せる")
+
+        servos.lift.write(lift_orosu)
+        wait_until_reached(servos.lift, "liftを下ろす")
+    finally:
+        # 次の待機中にガタガタしないよう、通常の保持上限へ戻す。
+        servos.set_pid("lift", max_speed_percent=normal_lift_speed_percent)
 
 
 def ball_fire(runtime):
