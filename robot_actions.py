@@ -29,6 +29,10 @@ catch_motiage = -45
 # 動作完了の判定には使わず、エンコーダーの実測角度で判定する。
 SERVO_MOVE_TIMEOUT_SEC = 8.0
 
+# 持上げ手順で「到達」とみなすエンコーダー実測誤差。
+# PIDの通常保持精度は hensuu.py の値のまま変えない。
+SERVO_MOVE_TOLERANCE_DEG = 3.0
+
 # 持上げ中だけ使うliftの強さ。大きくするほど速く強く動く。
 # 持上げ終了後は、hensuu.py の通常PID上限へ自動で戻る。
 LIFT_MOVE_SPEED_PERCENT = 20.0
@@ -88,24 +92,31 @@ def game2_ground_pose(runtime):
 
 
 def wait_until_reached(servo, name):
-    """エンコーダー実測値が目標角度へ届くまで待つ。
+    """エンコーダー実測値が目標±3度へ入るまで待つ。
 
     ``time.sleep(1)`` のような固定時間では完了扱いにしない。
-    PIDスレッドが読むRobStrideのmechPosと目標角度との差が、設定した
-    許容誤差以内になった時だけ次の行へ進む。
+    PIDスレッドが読むRobStrideのmechPosと目標角度との差が
+    ``SERVO_MOVE_TOLERANCE_DEG`` 以内になった時だけ次の行へ進む。
     """
     deadline = time.monotonic() + SERVO_MOVE_TIMEOUT_SEC
 
-    while not servo.is_at_target():
+    while True:
+        current = servo.read()
+        if current is not None:
+            error = servo.target_angle - current
+            if abs(error) <= SERVO_MOVE_TOLERANCE_DEG:
+                print(
+                    f"{name}: エンコーダーで到達を確認しました "
+                    f"({current:.1f}度、誤差 {error:+.1f}度)"
+                )
+                return
+
         if time.monotonic() >= deadline:
-            current = servo.read()
             raise TimeoutError(
                 f"{name} が目標角度へ到達しません "
                 f"(現在: {current}, 目標: {servo.target_angle})"
             )
         time.sleep(0.02)
-
-    print(f"{name}: エンコーダーで到達を確認しました ({servo.read():.1f}度)")
 
 
 def ball_lift_for_shot(runtime):
