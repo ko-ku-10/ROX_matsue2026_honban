@@ -60,6 +60,7 @@ class RobotRuntime:
                 mapping=DualSenseMotionMapping(
                     deadzone=0.08,
                     rotation_enable=Button.R2 if hensuu.mecanum_rotation_requires_r2 else None,
+                    invert_forward=hensuu.mecanum_invert_forward_input,
                 ),
             )
         except Exception:

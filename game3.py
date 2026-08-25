@@ -111,29 +111,26 @@ def main() -> None:
                     else:
                         stage = Stage.WAIT
 
-            # 地面走行姿勢に着いた時だけ、手動でメカナムを動かせる。
-            if stage is Stage.DRIVE:
-                if not drive_neutral_confirmed:
-                    # スティックを離したことを確認するまでは、必ず停止する。
-                    runtime.mecanum.stop()
-                    if (
-                        state.left_stick.magnitude < STICK_DEADZONE
-                        and state.right_stick.magnitude < STICK_DEADZONE
-                    ):
-                        drive_neutral_confirmed = True
-                        print("スティックのニュートラルを確認しました。走行できます")
-                else:
-                    command = runtime.manual_command(state)
-                    if state.left_stick.magnitude < STICK_DEADZONE:
-                        command = MotionCommand(rotate=command.rotate)
-                    if state.right_stick.magnitude < STICK_DEADZONE:
-                        command = MotionCommand(forward=command.forward, strafe=command.strafe)
-                    if command == MotionCommand.stop():
-                        runtime.mecanum.stop()
-                    else:
-                        runtime.mecanum.drive(command)
-            else:
+            # 姿勢の移動中・待機中でも、常にスティックで手動走行できる。
+            # ただしボタン操作の直後は、一度スティックを離してから走行を再開する。
+            if not drive_neutral_confirmed:
                 runtime.mecanum.stop()
+                if (
+                    state.left_stick.magnitude < STICK_DEADZONE
+                    and state.right_stick.magnitude < STICK_DEADZONE
+                ):
+                    drive_neutral_confirmed = True
+                    print("スティックのニュートラルを確認しました。走行できます")
+            else:
+                command = runtime.manual_command(state)
+                if state.left_stick.magnitude < STICK_DEADZONE:
+                    command = MotionCommand(rotate=command.rotate)
+                if state.right_stick.magnitude < STICK_DEADZONE:
+                    command = MotionCommand(forward=command.forward, strafe=command.strafe)
+                if command == MotionCommand.stop():
+                    runtime.mecanum.stop()
+                else:
+                    runtime.mecanum.drive(command)
 
             if stage is not shown_stage:
                 print(f"[{stage.value}]")

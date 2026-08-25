@@ -140,6 +140,8 @@ class DualSenseMotionMapping:
     translation_gain: float = 1.0
     rotation_gain: float = 1.0
     response_exponent: float = 1.0
+    # pygameのY軸は上方向が負になるため、実機に合わせて前後だけ反転できる。
+    invert_forward: bool = False
 
     def command(self, state: ControllerState) -> MotionCommand:
         """コントローラーの最新状態を正規化移動指令へ変換する。"""
@@ -149,8 +151,11 @@ class DualSenseMotionMapping:
             left = AnalogStick()
         if self.rotation_enable is not None and not state.button(self.rotation_enable):
             right = AnalogStick()
+        forward = _shape(left.y, self.response_exponent, self.translation_gain)
+        if self.invert_forward:
+            forward = -forward
         return MotionCommand(
-            forward=_shape(left.y, self.response_exponent, self.translation_gain),
+            forward=forward,
             strafe=_shape(left.x, self.response_exponent, self.translation_gain),
             rotate=_shape(right.x, self.response_exponent, self.rotation_gain),
         )
