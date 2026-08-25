@@ -146,12 +146,19 @@ class MecanumRobot:
         motor_directions: Mapping[str, float] = DEFAULT_MOTOR_DIRECTIONS,
         mixer: MecanumMixer | None = None,
         speed_span: int = AT_NEUTRAL_VALUE,
+        acceleration_per_second: float | None = None,
     ) -> None:
         missing = {"FL", "FR", "RL", "RR"} - set(motor_ids)
         if missing:
             raise ValueError(f"motor_ids is missing: {sorted(missing)}")
+        if acceleration_per_second is not None and acceleration_per_second <= 0.0:
+            raise ValueError("acceleration_per_second は0より大きくしてください")
         self.mixer = mixer or MecanumMixer()
         self.motor_directions = dict(motor_directions)
+        # Noneなら従来どおり即座に速度を変える。実機では加速制限を指定する。
+        self.acceleration_per_second = acceleration_per_second
+        self._last_wheel_speeds = {name: 0.0 for name in ("FL", "FR", "RL", "RR")}
+        self._last_drive_at: float | None = None
         self.motors = {
             name: ATMotor(transport, motor_ids[name], speed_span=speed_span)
             for name in ("FL", "FR", "RL", "RR")
@@ -170,7 +177,9 @@ class MecanumRobot:
 
     def drive(self, command: MotionCommand) -> WheelSpeeds:
         """移動指令を送り、取付方向補正後の4輪出力を返す。"""
-        speeds = self.mixer.mix(command).with_motor_directions(self.motor_directions)
+        target = self.mixer.mix(command).with_motor_directions(self.motor_directions)
+        target_values = target.as_dict()
+        speeds = self._apply_acceleration_limit(target_values)
         for name, speed in speeds.as_dict().items():
             self.motors[name].set_velocity(speed)
         return speeds
@@ -179,6 +188,30 @@ class MecanumRobot:
         """全輪に停止指令を送る。"""
         for motor in self.motors.values():
             motor.stop()
+        # OPTIONSなどで止めた後の次の発進も、必ず0からゆっくり始める。
+        self._last_wheel_speeds = {name: 0.0 for name in ("FL", "FR", "RL", "RR")}
+        self._last_drive_at = None
+
+    def _apply_acceleration_limit(self, target: Mapping[str, float]) -> WheelSpeeds:
+        """目標速度へ急に変えず、1輪ずつ少しずつ近づける。"""
+        if self.acceleration_per_second is None:
+            return WheelSpeeds(target["FL"], target["FR"], target["RL"], target["RR"])
+
+        now = monotonic()
+        # 最初の1回は制御周期50Hzを仮定する。起動から時間が経っていても急発進しない。
+        dt = 0.02 if self._last_drive_at is None else min(0.10, now - self._last_drive_at)
+        maximum_change = self.acceleration_per_second * max(0.0, dt)
+        values: dict[str, float] = {}
+
+        for name in ("FL", "FR", "RL", "RR"):
+            previous = self._last_wheel_speeds[name]
+            difference = target[name] - previous
+            change = max(-maximum_change, min(maximum_change, difference))
+            values[name] = previous + change
+
+        self._last_wheel_speeds = values
+        self._last_drive_at = now
+        return WheelSpeeds(values["FL"], values["FR"], values["RL"], values["RR"])
 
 
 def _motor_id(motor_id: int) -> int:

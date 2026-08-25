@@ -38,6 +38,7 @@ class RobotRuntime:
             motor_directions={"FL": 1.0, "FR": -1.0, "RL": 1.0, "RR": -1.0},
             mixer=MecanumMixer(rotation_gain=0.22),
             speed_span=_speed_span(hensuu.mecanum_speed_percent),
+            acceleration_per_second=hensuu.mecanum_acceleration_percent_per_sec / 100.0,
         )
         servos = open_servos(transport=transport)
         try:

@@ -14,7 +14,7 @@ from rox_mecanum import Button, MotionCommand, RobotRuntime
 
 
 # スティックの微妙なずれを無視する範囲。勝手に走るなら少し上げる。
-STICK_DEADZONE = 0.18
+STICK_DEADZONE = 0.25
 
 # CREATE / ○ / □で出したサーボ目標を待つ最大時間[秒]。
 # 超えた場合も非常停止せず、次の段階へ進む。
@@ -41,6 +41,8 @@ def main() -> None:
         stage = Stage.WAIT
         move_started = time.monotonic()
         shown_stage = None
+        # 走行可能へ移った直後は、両スティックが一度ニュートラルになるまで走らない。
+        drive_neutral_confirmed = False
 
         while True:
             loop_started = time.monotonic()
@@ -62,23 +64,27 @@ def main() -> None:
                 robot_actions.game3_ground_pose(runtime)
                 stage = Stage.GROUND
                 move_started = loop_started
+                drive_neutral_confirmed = False
 
             # ○: 掴む動作。
             elif state.was_pressed(Button.CIRCLE):
                 robot_actions.game3_grab(runtime)
                 stage = Stage.GRAB
                 move_started = loop_started
+                drive_neutral_confirmed = False
 
             # □: 排出動作。
             elif state.was_pressed(Button.SQUARE):
                 robot_actions.game3_release(runtime)
                 stage = Stage.RELEASE
                 move_started = loop_started
+                drive_neutral_confirmed = False
 
             # △: GAME2と共通の持上げ動作。
             elif state.was_pressed(Button.TRIANGLE):
                 robot_actions.ball_lift_for_shot(runtime)
                 stage = Stage.FIRED
+                drive_neutral_confirmed = False
 
             # 地面姿勢へ両方が到着した時だけ、スティック走行を許可する。
             if stage is Stage.GROUND:
@@ -107,15 +113,25 @@ def main() -> None:
 
             # 地面走行姿勢に着いた時だけ、手動でメカナムを動かせる。
             if stage is Stage.DRIVE:
-                command = runtime.manual_command(state)
-                if state.left_stick.magnitude < STICK_DEADZONE:
-                    command = MotionCommand(rotate=command.rotate)
-                if state.right_stick.magnitude < STICK_DEADZONE:
-                    command = MotionCommand(forward=command.forward, strafe=command.strafe)
-                if command == MotionCommand.stop():
+                if not drive_neutral_confirmed:
+                    # スティックを離したことを確認するまでは、必ず停止する。
                     runtime.mecanum.stop()
+                    if (
+                        state.left_stick.magnitude < STICK_DEADZONE
+                        and state.right_stick.magnitude < STICK_DEADZONE
+                    ):
+                        drive_neutral_confirmed = True
+                        print("スティックのニュートラルを確認しました。走行できます")
                 else:
-                    runtime.mecanum.drive(command)
+                    command = runtime.manual_command(state)
+                    if state.left_stick.magnitude < STICK_DEADZONE:
+                        command = MotionCommand(rotate=command.rotate)
+                    if state.right_stick.magnitude < STICK_DEADZONE:
+                        command = MotionCommand(forward=command.forward, strafe=command.strafe)
+                    if command == MotionCommand.stop():
+                        runtime.mecanum.stop()
+                    else:
+                        runtime.mecanum.drive(command)
             else:
                 runtime.mecanum.stop()
 

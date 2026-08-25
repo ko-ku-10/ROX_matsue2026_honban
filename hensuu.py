@@ -12,6 +12,9 @@ dualsense_disconnect_on_close = True
 
 # メカナム
 mecanum_speed_percent = 100       # 最高速度（0〜100）
+# 急発進を抑える加速の速さ。300なら停止→100%まで約0.33秒。
+# 小さいほどゆっくり、大きいほどキビキビ加速する。
+mecanum_acceleration_percent_per_sec = 300.0
 mecanum_rotation_requires_r2 = True
 
 # catch: CAN ID 5、時間式サーボ
