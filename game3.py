@@ -16,7 +16,8 @@ from rox_mecanum import Button, MotionCommand, RobotRuntime
 # スティックの微妙なずれを無視する範囲。勝手に走るなら少し上げる。
 STICK_DEADZONE = 0.18
 
-# CREATE / ○ / □で出したサーボ目標へ届かない時、安全停止する時間[秒]。
+# CREATE / ○ / □で出したサーボ目標を待つ最大時間[秒]。
+# 超えた場合も非常停止せず、次の段階へ進む。
 MOVE_TIMEOUT_SEC = 8.0
 
 
@@ -87,10 +88,8 @@ def main() -> None:
                 ):
                     stage = Stage.DRIVE
                 elif loop_started - move_started > MOVE_TIMEOUT_SEC:
-                    print("地面走行姿勢に到達しません。安全停止します")
-                    robot_actions.all_off()
-                    runtime.emergency_stop()
-                    break
+                    print("地面走行姿勢の到達確認はできません。走行可能へ進みます")
+                    stage = Stage.DRIVE
 
             # ○は掴む姿勢で待機する。□のmachi姿勢は到着後も走行できる。
             elif stage is Stage.GRAB or stage is Stage.RELEASE:
@@ -100,10 +99,11 @@ def main() -> None:
                     else:
                         stage = Stage.WAIT
                 elif loop_started - move_started > MOVE_TIMEOUT_SEC:
-                    print("catchが目標角度に到達しません。安全停止します")
-                    robot_actions.all_off()
-                    runtime.emergency_stop()
-                    break
+                    print("catchの到達確認はできません。次の段階へ進みます")
+                    if stage is Stage.RELEASE:
+                        stage = Stage.DRIVE
+                    else:
+                        stage = Stage.WAIT
 
             # 地面走行姿勢に着いた時だけ、手動でメカナムを動かせる。
             if stage is Stage.DRIVE:

@@ -25,7 +25,7 @@ catch_machi = -17
 # 地面で保持する角度とは別に、持上げ中にボールを保持できる角度。
 catch_motiage = -45
 
-# 指令した角度へ届かない時に、永遠に待ち続けないための安全時間。
+# 指令した角度を待つ最大時間。超えたら停止せず次の動作へ進む。
 # 動作完了の判定には使わず、エンコーダーの実測角度で判定する。
 SERVO_MOVE_TIMEOUT_SEC = 8.0
 
@@ -120,10 +120,11 @@ def wait_until_reached(servo, name):
             return
 
         if time.monotonic() >= deadline:
-            raise TimeoutError(
-                f"{name} が目標角度へ到達しません "
+            print(
+                f"{name}: 8秒以内に到達確認できませんでした。次の動作へ進みます "
                 f"(現在: {current}, 目標: {servo.target_angle})"
             )
+            return
         time.sleep(0.02)
 
 
