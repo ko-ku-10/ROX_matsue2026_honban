@@ -9,6 +9,7 @@ from __future__ import annotations
 import time
 
 import camera_hensuu
+import robot_actions
 from rox_mecanum import (
     AprilTagDetector,
     Button,
@@ -33,10 +34,6 @@ CENTER_GAIN = 0.45
 CENTER_TOLERANCE = 0.08
 DISTANCE_TOLERANCE_M = 0.08
 
-# 地面にボールを付けて走る姿勢と、発射時のlift角度。
-GROUND_CATCH_ANGLE = 0.0
-GROUND_LIFT_ANGLE = 0.0
-LIFT_FIRE_ANGLE = 0.0
 LIFT_TIMEOUT_SEC = 8.0
 
 # 発射後に補給場所へ戻る動き。
@@ -58,17 +55,14 @@ SHOT_DISTANCE_M = {
     "bottom": 1.20,
 }
 
-# ソレノイド1を発射するときのON時間[秒]。
-SOLENOID1_ON_TIME_SEC = 0.3
-
-
 def main() -> None:
     print("GAME2: タッチパッド=手動/自動, CREATE=照準, △=持上げ, L2=発射, ×=後退, OPTIONS=停止")
     runtime = None
     camera = None
 
     try:
-        runtime = RobotRuntime.open(with_solenoid=True, with_solenoid2=True)
+        runtime = RobotRuntime.open()
+        robot_actions.setup_gpio()
         camera = open_camera(
             backend=camera_hensuu.camera_backend,
             device=camera_hensuu.camera_device,
@@ -102,6 +96,7 @@ def main() -> None:
             # OPTIONSは最優先。すべて停止して終了する。
             if state.was_pressed(Button.OPTIONS):
                 print("OPTIONS: 非常停止")
+                robot_actions.all_off()
                 runtime.emergency_stop()
                 break
 
@@ -130,8 +125,7 @@ def main() -> None:
                     else:
                         target_ids = choice.tag_ids
                         target_row = choice.row
-                        runtime.servos.catch.write(GROUND_CATCH_ANGLE)
-                        runtime.servos.lift.write(GROUND_LIFT_ANGLE)
+                        robot_actions.game2_ground_pose(runtime)
                         stage = "地面走行姿勢へ移動中"
 
                 # ボールを地面に付ける姿勢に着くまで、自動走行しない。
@@ -169,7 +163,7 @@ def main() -> None:
 
                 # △: liftを発射高さへ動かす。
                 elif stage == "照準完了: △で持上げ" and state.was_pressed(Button.TRIANGLE):
-                    runtime.servos.lift.write(LIFT_FIRE_ANGLE)
+                    robot_actions.game2_lift_for_shot(runtime)
                     lift_started = loop_started
                     stage = "発射高さへ持上げ中"
 
@@ -181,17 +175,14 @@ def main() -> None:
                         runtime.emergency_stop()
                         break
 
-                # L2: ソレノイド1だけを発射。
+                # L2: robot_actions.pyに書いた発射動作を実行する。
                 elif stage == "発射準備完了: L2で発射" and state.was_pressed(Button.L2):
-                    if runtime.solenoid is None:
-                        raise RuntimeError("ソレノイド1が開かれていません")
-                    runtime.solenoid.pulse(SOLENOID1_ON_TIME_SEC)
+                    robot_actions.game2_fire(runtime)
                     stage = "発射済み: ×で後退"
 
                 # ×: liftを下ろし、地面走行姿勢へ戻す。
                 elif stage == "発射済み: ×で後退" and state.was_pressed(Button.CROSS):
-                    runtime.servos.catch.write(GROUND_CATCH_ANGLE)
-                    runtime.servos.lift.write(GROUND_LIFT_ANGLE)
+                    robot_actions.game2_ground_pose(runtime)
                     stage = "liftを下げ中"
 
                 elif stage == "liftを下げ中":
@@ -213,7 +204,6 @@ def main() -> None:
             # 自動速度へ手動スティックを足す。完全手動なら手動だけになる。
             command = add_manual_command(auto, runtime.manual_command(state), mode.auto_enabled)
             runtime.mecanum.drive(command)
-            runtime.update_outputs()
 
             if stage != shown_stage:
                 print(f"[{mode.mode.value}] {stage}  target={target_ids} row={target_row}")
@@ -223,12 +213,15 @@ def main() -> None:
 
     except KeyboardInterrupt:
         if runtime is not None:
+            robot_actions.all_off()
             runtime.emergency_stop()
     finally:
+        robot_actions.all_off()
         if camera is not None:
             camera.close()
         if runtime is not None:
             runtime.close()
+        robot_actions.close_gpio()
 
 
 if __name__ == "__main__":

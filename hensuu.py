@@ -78,8 +78,3 @@ servo_feedback_timeout_sec = 0.25
 
 # 状態表示サイト: http://ロボットのIPアドレス:8000
 dashboard_port = 8000
-
-# ソレノイド
-solenoid_pin = 27
-# 2個目のGPIO番号。配線が決まるまで None のままにする（絶対にONにならない）。
-solenoid2_pin = None

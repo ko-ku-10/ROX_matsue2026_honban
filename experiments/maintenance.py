@@ -14,6 +14,7 @@ import camera_hensuu
 import game1
 import game2
 import hensuu
+import robot_actions
 from rox_mecanum import (
     AprilTagDetector,
     Button,
@@ -48,7 +49,9 @@ def main() -> None:
     parser.add_argument("--camera-only", action="store_true", help="モーターを開かず、カメラだけ確認する")
     args = parser.parse_args()
 
-    runtime = None if args.camera_only else RobotRuntime.open(with_solenoid=True)
+    runtime = None if args.camera_only else RobotRuntime.open()
+    if runtime is not None:
+        robot_actions.setup_gpio()
     camera = None
     site = None
     test_command = MotionCommand.stop()
@@ -70,8 +73,8 @@ def main() -> None:
             runtime.mecanum.stop()
             return "停止しました"
         if name == "solenoid":
-            runtime.fire()
-            return "ソレノイドを短時間オンにしました"
+            robot_actions.game3_cylinder_extend(runtime)
+            return "robot_actions.py のシリンダー伸ばす動作を実行しました"
         if name not in commands:
             return "未対応のテストです"
         test_command = commands[name]
@@ -111,7 +114,6 @@ def main() -> None:
                     runtime.mecanum.drive(test_command)
                 else:
                     runtime.mecanum.drive(runtime.manual_command(state))
-                runtime.update_outputs()
                 state_info.update(
                     active_buttons=[button.value for button in state.active_buttons],
                     catch=runtime.servos.catch.status(),
@@ -135,12 +137,14 @@ def main() -> None:
     except KeyboardInterrupt:
         pass
     finally:
+        robot_actions.all_off()
         if site is not None:
             site.close()
         if camera is not None:
             camera.close()
         if runtime is not None:
             runtime.close()
+        robot_actions.close_gpio()
 
 
 if __name__ == "__main__":

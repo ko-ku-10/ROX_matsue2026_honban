@@ -9,6 +9,7 @@
 | `game1.py` | GAME1本番用 |
 | `game2.py` | GAME2本番用 |
 | `game3.py` | GAME3・操作練習用 |
+| `robot_actions.py` | GPIO番号と、あなたが書くlift/catch/シリンダーの動き |
 | `game1.py`, `game2.py`, `game3.py` の先頭 | そのGAMEのTag、角度、速度、時間、ボタン動作 |
 | `hensuu.py` | CAN ID、シリアルポート、GPIO番号などの機体配線設定 |
 | `experiments/` | 本番では実行しない単体実験・カメラ確認 |
@@ -30,7 +31,7 @@ python3 game3.py
 
 GAME1/GAME2は起動直後は完全手動モード。タッチパッドで自動モードへ切り替える。OPTIONSは非常停止・終了。GAME1〜3はEnter入力を待たず、catch/liftの起動時実測角度を自動で0度として登録する。起動前に機構を所定の開始姿勢へ置いておくこと。
 
-GAME3は常に手動操作である。CREATEで地面保持姿勢にしてから走行する。△の持上げは `game3.py` に直接書かれている。OPTIONS・角度到達失敗・Ctrl+C・終了時は必ず停止する。R1はソレノイド1、L1はソレノイド2の単体操作である。ソレノイド2は `hensuu.py` の `solenoid2_pin` を設定するまで動かない。
+GPIO番号、lift/catch、シリンダー、持上げ・発射の順番は `robot_actions.py` に直接書く。GAME1〜3はその関数を呼ぶ。OPTIONS・例外・Ctrl+C・終了時は、`robot_actions.all_off()` で2個のGPIOをLOWにしてから停止する。
 
 同じコントローラーやモーター通信を使うプログラムは、同時に起動しないこと。
 
@@ -57,7 +58,7 @@ python3 -m experiments.lift_test
 # catch / lift の現在位置保持だけ
 python3 -m experiments.servo_hold
 
-# ソレノイドだけ
+# robot_actions.pyに書いたシリンダー伸縮だけ
 python3 -m experiments.solenoid_test
 
 # カメラ映像とAprilTagだけ（モーターは動かない）
@@ -81,11 +82,11 @@ python3 -m experiments.calibrate_distance 1.00
 
 | 変更したいもの | ファイル |
 |---|---|
-| CAN ID、シリアルポート、GPIO番号、PID | `hensuu.py` |
+| CAN ID、シリアルポート、PID | `hensuu.py` |
 | カメラ、Tagサイズ、焦点距離 | `camera_hensuu.py` |
 | GAME1のTag番号、時間、速度、距離 | `game1.py` の先頭 |
 | GAME2のパネルTag、段ごとの発射距離、速度 | `game2.py` の先頭 |
-| GAME3のcatch/lift角度、持上げ順番、ソレノイド時間 | `game3.py` の先頭 |
+| GPIO番号、catch/lift角度、持上げ順番、シリンダーON/OFF | `robot_actions.py` |
 
 GAME2の段ごとの発射距離はここで設定する。
 

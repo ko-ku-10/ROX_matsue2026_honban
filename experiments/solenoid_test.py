@@ -1,34 +1,39 @@
-"""L2を押すと、本番と同じソレノイド発射処理を単体確認する。"""
+"""robot_actions.pyに書いたエアシリンダー動作を単体確認する。
+
+L2: 伸ばす / R2: 戻す / OPTIONS: 両方OFFにして終了
+実行: python3 -m experiments.solenoid_test
+"""
 
 import time
 
-import hensuu
-import solenoid
-from rox_mecanum import Button, open_configured_dualsense
-from rox_mecanum.solenoid import RDKSolenoid
+import robot_actions
+from rox_mecanum import Button, RobotRuntime
 
 
 def main() -> None:
-    output = RDKSolenoid(hensuu.solenoid_pin)
-    controller = open_configured_dualsense()
-    was_pressed = False
-    print("L2: ソレノイド  /  OPTIONS: 終了")
+    runtime = None
     try:
+        runtime = RobotRuntime.open()
+        robot_actions.setup_gpio()
+        print("L2: 伸ばす / R2: 戻す / OPTIONS: 終了")
+
         while True:
-            state = controller.read()
-            if state.button(Button.OPTIONS):
+            state = runtime.controller.read()
+            if state.was_pressed(Button.OPTIONS):
+                print("OPTIONS: 停止")
+                robot_actions.all_off()
+                runtime.emergency_stop()
                 break
-            pressed = state.button(Button.L2)
-            if pressed and not was_pressed:
-                # GAME2/GAME3と同じ solenoid.py の処理。
-                solenoid.fire(output)
-                print(f"ソレノイド ON ({solenoid.on_time_sec}秒)")
-            was_pressed = pressed
-            output.update()
+            if state.was_pressed(Button.L2):
+                robot_actions.game3_cylinder_extend(runtime)
+            if state.was_pressed(Button.R2):
+                robot_actions.game3_cylinder_retract(runtime)
             time.sleep(0.02)
     finally:
-        output.close()
-        controller.close()
+        robot_actions.all_off()
+        if runtime is not None:
+            runtime.close()
+        robot_actions.close_gpio()
 
 
 if __name__ == "__main__":

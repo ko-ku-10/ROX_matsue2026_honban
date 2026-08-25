@@ -10,6 +10,7 @@ from __future__ import annotations
 import time
 
 import camera_hensuu
+import robot_actions
 from rox_mecanum import (
     AprilTagDetector,
     Button,
@@ -36,10 +37,6 @@ TAG_BOARD_RIGHT = 13
 TAG_RETURN_LEFT = 6
 TAG_RETURN_RIGHT = 10
 TAG_GOAL = 0
-
-# CREATEで作る開始姿勢。以後GAME1中はlift/catchを動かさない。
-START_CATCH_ANGLE = 0.0
-START_LIFT_ANGLE = 0.0
 
 # Tagを中心・目標距離へ寄せる速さと許容範囲。
 AUTO_SPEED = 0.20
@@ -75,7 +72,8 @@ def main() -> None:
     camera = None
 
     try:
-        runtime = RobotRuntime.open(with_solenoid=False)
+        runtime = RobotRuntime.open()
+        robot_actions.setup_gpio()
         camera = open_camera(
             backend=camera_hensuu.camera_backend,
             device=camera_hensuu.camera_device,
@@ -111,6 +109,7 @@ def main() -> None:
             # OPTIONSは最優先。全モーターを止めて終了する。
             if state.was_pressed(Button.OPTIONS):
                 print("OPTIONS: 非常停止")
+                robot_actions.all_off()
                 runtime.emergency_stop()
                 break
 
@@ -137,8 +136,7 @@ def main() -> None:
                 # CREATE: スタート時のサイズ用の姿勢へ移動する。
                 # ここからGAME1終了までlift/catchには命令を出さない。
                 if stage == "CREATEで開始姿勢へ展開" and state.was_pressed(Button.CREATE):
-                    runtime.servos.catch.write(START_CATCH_ANGLE)
-                    runtime.servos.lift.write(START_LIFT_ANGLE)
+                    robot_actions.game1_start_pose(runtime)
                     stage = "lift/catchを展開中"
 
                 elif stage == "lift/catchを展開中":
@@ -303,7 +301,6 @@ def main() -> None:
             # 自動速度へ手動スティックを足す。完全手動なら手動だけになる。
             command = add_manual_command(auto, runtime.manual_command(state), mode.auto_enabled)
             runtime.mecanum.drive(command)
-            runtime.update_outputs()
 
             if stage != shown_stage:
                 print(f"[{mode.mode.value}] {stage}  side={'A' if side_a else 'B'}")
@@ -313,12 +310,15 @@ def main() -> None:
 
     except KeyboardInterrupt:
         if runtime is not None:
+            robot_actions.all_off()
             runtime.emergency_stop()
     finally:
+        robot_actions.all_off()
         if camera is not None:
             camera.close()
         if runtime is not None:
             runtime.close()
+        robot_actions.close_gpio()
 
 
 if __name__ == "__main__":
