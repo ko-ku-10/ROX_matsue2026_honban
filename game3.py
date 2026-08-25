@@ -92,10 +92,13 @@ def main() -> None:
                     runtime.emergency_stop()
                     break
 
-            # ○ / □ はcatchが目標へ着いたら待機へ戻る。
+            # ○は掴む姿勢で待機する。□のmachi姿勢は到着後も走行できる。
             elif stage is Stage.GRAB or stage is Stage.RELEASE:
                 if robot_actions.is_within_move_tolerance(runtime.servos.catch):
-                    stage = Stage.WAIT
+                    if stage is Stage.RELEASE:
+                        stage = Stage.DRIVE
+                    else:
+                        stage = Stage.WAIT
                 elif loop_started - move_started > MOVE_TIMEOUT_SEC:
                     print("catchが目標角度に到達しません。安全停止します")
                     robot_actions.all_off()
