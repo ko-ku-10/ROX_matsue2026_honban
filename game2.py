@@ -161,9 +161,9 @@ def main() -> None:
                         if abs(target.horizontal_error) <= CENTER_TOLERANCE:
                             stage = "照準完了: △で持上げ"
 
-                # △: liftを発射高さへ動かす。
+                # △: GAME3と共通の持上げ動作。
                 elif stage == "照準完了: △で持上げ" and state.was_pressed(Button.TRIANGLE):
-                    robot_actions.game2_lift_for_shot(runtime)
+                    robot_actions.ball_lift_for_shot(runtime)
                     lift_started = loop_started
                     stage = "発射高さへ持上げ中"
 
@@ -175,9 +175,9 @@ def main() -> None:
                         runtime.emergency_stop()
                         break
 
-                # L2: robot_actions.pyに書いた発射動作を実行する。
+                # L2: GAME3と共通の発射動作を実行する。
                 elif stage == "発射準備完了: L2で発射" and state.was_pressed(Button.L2):
-                    robot_actions.game2_fire(runtime)
+                    robot_actions.ball_fire(runtime)
                     stage = "発射済み: ×で後退"
 
                 # ×: liftを下ろし、地面走行姿勢へ戻す。

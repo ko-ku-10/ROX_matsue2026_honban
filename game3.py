@@ -30,7 +30,7 @@ class Stage(str, Enum):
 
 
 def main() -> None:
-    print("GAME3: CREATE=地面姿勢 / ○=掴む / □=排出 / △=持上げ / R1=伸ばす / L1=戻す / OPTIONS=停止")
+    print("GAME3: CREATE=地面姿勢 / ○=掴む / □=排出 / △=持上げ / R1=発射 / L1=戻す / OPTIONS=停止")
     runtime = None
 
     try:
@@ -52,9 +52,9 @@ def main() -> None:
                 runtime.emergency_stop()
                 break
 
-            # R1 / L1: robot_actions.pyに自分で書いたシリンダー動作を実行する。
+            # R1: GAME2と共通の発射動作。L1は単体でシリンダーを戻す。
             if state.was_pressed(Button.R1):
-                robot_actions.game3_cylinder_extend(runtime)
+                robot_actions.ball_fire(runtime)
             if state.was_pressed(Button.L1):
                 robot_actions.game3_cylinder_retract(runtime)
 
@@ -76,9 +76,9 @@ def main() -> None:
                 stage = Stage.RELEASE
                 move_started = loop_started
 
-            # △: 持上げ・発射までの全順番は robot_actions.py に自分で書く。
+            # △: GAME2と共通の持上げ動作。
             elif state.was_pressed(Button.TRIANGLE):
-                robot_actions.game3_motiage(runtime)
+                robot_actions.ball_lift_for_shot(runtime)
                 stage = Stage.FIRED
 
             # 地面姿勢へ両方が到着した時だけ、スティック走行を許可する。
