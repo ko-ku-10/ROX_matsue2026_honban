@@ -17,7 +17,7 @@ except ImportError:  # pragma: no cover - RDK X5実機依存
 # GPIO番号をここに直接書く。
 # ==================================================
 CYLINDER_EXTEND_PIN = 27
-CYLINDER_RETRACT_PIN = None  # 2個目のGPIO番号が決まったら数字へ変える。
+CYLINDER_RETRACT_PIN = 17
 _configured_pins = set()
 
 
@@ -61,33 +61,48 @@ def close_gpio():
 
 def game1_start_pose(runtime):
     """GAME1: CREATEを押した時の開始姿勢。"""
-    raise NotImplementedError("robot_actions.py の game1_start_pose() を書いてください")
+    servos.lift.write(110)
+    servos.catch.write(-30)
 
 
 def game2_ground_pose(runtime):
     """GAME2: 地面にボールを付けて走る姿勢。"""
-    raise NotImplementedError("robot_actions.py の game2_ground_pose() を書いてください")
-
+    servos.lift.write(110)
+    servos.catch.write(-30)
 
 def game2_lift_for_shot(runtime):
     """GAME2: 発射高さへliftを動かす。"""
-    raise NotImplementedError("robot_actions.py の game2_lift_for_shot() を書いてください")
+    servos.catch.write(-45)
+    time.sleep(0.5)
+    servos.lift.write(20)
+    time.sleep(1)
+    servos.catch.write(-10)
+    time.sleep(0.5)
+    servos.lift.write(110)
 
 
 def game2_fire(runtime):
     """GAME2: 発射動作。GPIOを直接使って自由に書く。"""
-    raise NotImplementedError("robot_actions.py の game2_fire() を書いてください")
+    GPIO.output(17, GPIO.LOW)
+    GPIO.output(27, GPIO.HIGH)
+    time.sleep(0.05)
+    GPIO.output(27, GPIO.LOW)
+    GPIO.output(17, GPIO.HIGH)
+    time.sleep(0.05)
+    GPIO.output(17, GPIO.LOW)
+    GPIO.output(27, GPIO.LOW)
 
 
 def game3_ground_pose(runtime):
     """GAME3: 地面走行姿勢。"""
-    raise NotImplementedError("robot_actions.py の game3_ground_pose() を書いてください")
+    servos.lift.write(110)
+    servos.catch.write(0)
 
 
 def game3_grab(runtime):
     """GAME3: ○を押した時の掴む動作。"""
-    raise NotImplementedError("robot_actions.py の game3_grab() を書いてください")
-
+    servos.lift.write(110)
+    servos.catch.write()
 
 def game3_release(runtime):
     """GAME3: □を押した時の排出動作。"""
