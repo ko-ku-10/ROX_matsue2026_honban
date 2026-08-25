@@ -41,9 +41,6 @@ def main() -> None:
         stage = Stage.WAIT
         move_started = time.monotonic()
         shown_stage = None
-        # 走行可能へ移った直後は、両スティックが一度ニュートラルになるまで走らない。
-        drive_neutral_confirmed = False
-
         while True:
             loop_started = time.monotonic()
             state = runtime.controller.read()
@@ -64,27 +61,23 @@ def main() -> None:
                 robot_actions.game3_ground_pose(runtime)
                 stage = Stage.GROUND
                 move_started = loop_started
-                drive_neutral_confirmed = False
 
             # ○: 掴む動作。
             elif state.was_pressed(Button.CIRCLE):
                 robot_actions.game3_grab(runtime)
                 stage = Stage.GRAB
                 move_started = loop_started
-                drive_neutral_confirmed = False
 
             # □: 排出動作。
             elif state.was_pressed(Button.SQUARE):
                 robot_actions.game3_release(runtime)
                 stage = Stage.RELEASE
                 move_started = loop_started
-                drive_neutral_confirmed = False
 
             # △: GAME2と共通の持上げ動作。
             elif state.was_pressed(Button.TRIANGLE):
                 robot_actions.ball_lift_for_shot(runtime)
                 stage = Stage.FIRED
-                drive_neutral_confirmed = False
 
             # 地面姿勢へ両方が到着した時だけ、スティック走行を許可する。
             if stage is Stage.GROUND:
@@ -112,25 +105,15 @@ def main() -> None:
                         stage = Stage.WAIT
 
             # 姿勢の移動中・待機中でも、常にスティックで手動走行できる。
-            # ただしボタン操作の直後は、一度スティックを離してから走行を再開する。
-            if not drive_neutral_confirmed:
+            command = runtime.manual_command(state)
+            if state.left_stick.magnitude < STICK_DEADZONE:
+                command = MotionCommand(rotate=command.rotate)
+            if state.right_stick.magnitude < STICK_DEADZONE:
+                command = MotionCommand(forward=command.forward, strafe=command.strafe)
+            if command == MotionCommand.stop():
                 runtime.mecanum.stop()
-                if (
-                    state.left_stick.magnitude < STICK_DEADZONE
-                    and state.right_stick.magnitude < STICK_DEADZONE
-                ):
-                    drive_neutral_confirmed = True
-                    print("スティックのニュートラルを確認しました。走行できます")
             else:
-                command = runtime.manual_command(state)
-                if state.left_stick.magnitude < STICK_DEADZONE:
-                    command = MotionCommand(rotate=command.rotate)
-                if state.right_stick.magnitude < STICK_DEADZONE:
-                    command = MotionCommand(forward=command.forward, strafe=command.strafe)
-                if command == MotionCommand.stop():
-                    runtime.mecanum.stop()
-                else:
-                    runtime.mecanum.drive(command)
+                runtime.mecanum.drive(command)
 
             if stage is not shown_stage:
                 print(f"[{stage.value}]")
