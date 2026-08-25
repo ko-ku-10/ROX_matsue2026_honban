@@ -121,16 +121,3 @@ def game3_release(runtime):
     servos.lift.write(lift_orosu)
     servos.catch.write(catch_machi)
 
-def game3_cylinder_extend(runtime):
-    """GAME3: R1を押した時のシリンダーを伸ばす動作。"""
-    GPIO.output(17, GPIO.LOW)
-    GPIO.output(27, GPIO.HIGH)
-    time.sleep(0.05)
-    GPIO.output(27, GPIO.LOW)
-    GPIO.output(17, GPIO.HIGH)
-    time.sleep(0.05)
-    GPIO.output(17, GPIO.LOW)
-    GPIO.output(27, GPIO.LOW)
-
-def game3_cylinder_retract(runtime):
-    """GAME3: L1を押した時のシリンダーを戻す動作。"""
