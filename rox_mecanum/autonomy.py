@@ -5,9 +5,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 from time import monotonic
+from typing import Protocol
 
 from .controller import Button, ControllerState
 from .mecanum import MotionCommand
+
+
+class HorizontalTarget(Protocol):
+    """画像中心からの左右ずれを持つ、Tagなどの検出対象。"""
+
+    horizontal_error: float
 
 
 class ControlMode(str, Enum):
@@ -53,6 +60,27 @@ def add_manual_command(auto: MotionCommand, manual: MotionCommand, enabled: bool
         strafe=auto.strafe + manual.strafe,
         rotate=auto.rotate + manual.rotate,
     )
+
+
+def face_target_command(
+    target: HorizontalTarget,
+    *,
+    center_tolerance: float = 0.08,
+    rotation_gain: float = 0.60,
+    maximum_speed: float = 0.20,
+) -> MotionCommand:
+    """Tagが画面中央へ来るまで、その方向へだけ旋回する。
+
+    画面端のTagは魚眼や斜め視点で距離が不正確になりやすいため、前進・横移動を
+    始める前にこの指令でカメラ正面へ向ける。中央に入っていれば停止を返す。
+    """
+    if center_tolerance < 0.0 or rotation_gain <= 0.0 or maximum_speed <= 0.0:
+        raise ValueError("中心許容値・旋回ゲイン・最大速度を確認してください")
+    error = float(target.horizontal_error)
+    if abs(error) <= center_tolerance:
+        return MotionCommand.stop()
+    speed = max(-maximum_speed, min(maximum_speed, error * rotation_gain))
+    return MotionCommand(rotate=speed)
 
 
 @dataclass

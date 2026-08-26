@@ -151,3 +151,6 @@ class FeedbackServoTests(unittest.TestCase):
         servo.update_radians(1.0, 1.0)
         self.assertTrue(servo.watchdog(1.21))
         self.assertEqual(motor.speeds[-1], (0.0, True))
+        # 応答断が続いても、停止フレームを連続送信してCANを圧迫しない。
+        self.assertFalse(servo.watchdog(1.22))
+        self.assertEqual(motor.speeds[-1], (0.0, True))

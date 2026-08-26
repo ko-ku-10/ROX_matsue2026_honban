@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from rox_mecanum import Button, ControlMode, ControllerState, ModeController, MotionCommand, TagObservation, TagStore, add_manual_command, midpoint
+from rox_mecanum import Button, ControlMode, ControllerState, ModeController, MotionCommand, TagObservation, TagStore, add_manual_command, face_target_command, midpoint
 
 
 def test_touchpad_switches_mode_only_on_press() -> None:
@@ -35,3 +35,13 @@ def test_pair_midpoint_is_centered() -> None:
     target = midpoint(first, second)
     assert target.horizontal_error == 0.0
     assert target.distance_m == 1.1
+
+
+def test_face_target_rotates_only_when_tag_is_off_center() -> None:
+    centered = TagObservation(8, 500, 200, 1000, 1.0, 1.0)
+    right_edge = TagObservation(8, 900, 200, 1000, 1.0, 1.0)
+    assert face_target_command(centered) == MotionCommand.stop()
+    command = face_target_command(right_edge, maximum_speed=0.2)
+    assert command.forward == 0.0
+    assert command.strafe == 0.0
+    assert command.rotate > 0.0

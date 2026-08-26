@@ -168,6 +168,8 @@ class EncoderPositionServo:
         # write()/hold_current()などの明示命令があるまで、絶対に出力しない。
         self._holding = False
         self.last_command = 0.0
+        # エンコーダー応答断による停止フレームを、1回だけ送るための印。
+        self._feedback_timed_out = False
 
     def enable(self, retries: int = 3) -> None:
         for _ in range(retries):
@@ -185,6 +187,7 @@ class EncoderPositionServo:
         self.last_feedback_at = None
         self._integral = 0.0
         self._holding = False
+        self._feedback_timed_out = False
         self.motor.stop()
 
     def set_home_radians(self, position_rad: float, angle: float = 0.0) -> None:
@@ -201,6 +204,7 @@ class EncoderPositionServo:
         self.last_feedback_at = None
         self._integral = 0.0
         self._holding = False
+        self._feedback_timed_out = False
         self.motor.stop()
 
     def write(self, angle: float) -> float:
@@ -264,6 +268,7 @@ class EncoderPositionServo:
         self._holding = False
         self._integral = 0.0
         self.last_command = 0.0
+        self._feedback_timed_out = False
         self.motor.stop()
 
     def pid_off(self) -> None:
@@ -309,10 +314,15 @@ class EncoderPositionServo:
             and self.last_feedback_at is not None
             and now - self.last_feedback_at > self.config.feedback_timeout_sec
         ):
+            # 応答断中に停止フレームを毎周期送ると、USB-CAN変換器を圧迫して
+            # 角度応答の復帰まで妨げてしまう。最初の1回だけ安全停止する。
+            if self._feedback_timed_out:
+                return False
             self._integral = 0.0
             self._last_error = 0.0
             self._last_update = None
             self.last_command = 0.0
+            self._feedback_timed_out = True
             self.motor.stop()
             return True
         return False
@@ -321,6 +331,8 @@ class EncoderPositionServo:
         if self.current_angle is None:
             return None
         self.last_feedback_at = now
+        # 新しい正式mechPosを受信したので、応答断から復帰した。
+        self._feedback_timed_out = False
         if not self._holding:
             # release() で停止フレームはすでに1回送っている。
             # 以後はエンコーダーだけ読み、不要な停止フレームを連続送信しない。
