@@ -21,8 +21,11 @@ CYLINDER_EXTEND_PIN = 17
 CYLINDER_RETRACT_PIN = 27
 # 片側をOFFにしてから反対側をONにするまでの安全な待機時間。
 CYLINDER_SWITCH_OFF_SEC = 0.02
-lift_orosu = 106
-lift_motiage = 20
+# liftは起動時に地面ドリブル位置のストッパーを0度として原点合わせする。
+lift_orosu = 0
+# 以前の「下ろす106度 → 持上げ20度」の差を、ストッパー原点へ換算した仮値。
+# 実機で発射台に合う角度を確認してから自由に変える。
+lift_motiage = -86
 catch_hozi = -40
 catch_machi = -17
 # 地面で保持する角度とは別に、持上げ中にボールを保持できる角度。

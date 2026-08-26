@@ -44,10 +44,33 @@ class RobotRuntime:
         try:
             mecanum.enable_all(retries=3, interval=0.05)
             servos.attach()
-            # 本番では操縦者のEnter確認を待たない。起動時の実測角度を0度として登録する。
-            # 機構は起動前に、あらかじめ決めた開始姿勢へ置いておく。
-            print("catch/liftの現在角度を起動時の0度として自動登録します")
-            servos.home_from_feedback()
+            # catchは開く側、liftは地面ドリブル位置のストッパーで原点を作る。
+            # 動作方向を間違えた場合は hensuu.py の *_homing_direction だけを反転する。
+            if hensuu.catch_home_to_stop_enabled:
+                servos.home_to_stop(
+                    "catch",
+                    speed_percent=hensuu.catch_homing_speed_percent,
+                    direction=hensuu.catch_homing_direction,
+                    stillness_deg=hensuu.catch_homing_stillness_deg,
+                    stillness_sec=hensuu.catch_homing_stillness_sec,
+                    timeout_sec=hensuu.catch_homing_timeout_sec,
+                )
+            else:
+                print("catchの現在角度を起動時の0度として登録します")
+                servos.home_from_feedback(names=("catch",))
+
+            if hensuu.lift_home_to_stop_enabled:
+                servos.home_to_stop(
+                    "lift",
+                    speed_percent=hensuu.lift_homing_speed_percent,
+                    direction=hensuu.lift_homing_direction,
+                    stillness_deg=hensuu.lift_homing_stillness_deg,
+                    stillness_sec=hensuu.lift_homing_stillness_sec,
+                    timeout_sec=hensuu.lift_homing_timeout_sec,
+                )
+            else:
+                print("liftの現在角度を起動時の0度として登録します")
+                servos.home_from_feedback(names=("lift",))
             # start_pid() は更新スレッドを始めるだけで保持はオンにしない。
             # 原点登録した現在位置を明示的に目標にしてから開始する。
             servos.hold_all_current()

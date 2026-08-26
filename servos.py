@@ -59,13 +59,19 @@ class ServoMotors:
                     "angle_monitor.pyでAT応答形式を確認してください"
                 )
 
-    def home_from_feedback(self, timeout_sec: float = 5.0) -> None:
-        """最新フィードバックを待ち、現在位置を両方の0°として登録する。"""
+    def home_from_feedback(
+        self,
+        timeout_sec: float = 5.0,
+        names: tuple[str, ...] = ("catch", "lift"),
+    ) -> None:
+        """指定した機構の現在位置を0°として登録する。"""
+        if not names or any(name not in {"catch", "lift"} for name in names):
+            raise ValueError("names は catch/lift を1台以上指定してください")
         deadline = time.monotonic() + timeout_sec
         values: dict[str, EncoderFeedback] = {}
-        while time.monotonic() < deadline and len(values) < 2:
+        while time.monotonic() < deadline and len(values) < len(names):
             # AT変換器が応答を落とさないよう、初期化では1台ずつ50ms待つ。
-            for name in ("catch", "lift"):
+            for name in names:
                 if name in values:
                     continue
                 self.reader.request(name)
@@ -73,11 +79,85 @@ class ServoMotors:
                 for feedback in self.reader.poll():
                     # attach()直後には有効化・停止に対する旧ステータス応答も来る。
                     # 原点には正式なmechPos(0x7019 float)だけを絶対に採用する。
-                    if feedback.name in {"catch", "lift"} and feedback.position_rad is not None:
+                    if feedback.name in names and feedback.position_rad is not None:
                         values[feedback.name] = feedback
-        if set(values) != {"catch", "lift"}:
-            raise TimeoutError("catch/liftのエンコーダー応答を受信できませんでした")
-        self.home_feedbacks(values)
+        if set(values) != set(names):
+            requested = "/".join(names)
+            raise TimeoutError(f"{requested}のエンコーダー応答を受信できませんでした")
+        for name in names:
+            feedback = values[name]
+            self._servo(name).set_home_radians(feedback.position_rad)
+
+    def home_to_stop(
+        self,
+        name: str,
+        *,
+        speed_percent: float,
+        direction: int,
+        stillness_deg: float,
+        stillness_sec: float,
+        timeout_sec: float,
+    ) -> None:
+        """指定した機構をストッパーまで動かし、停止位置を0°として登録する。
+
+        ``direction=1`` は論理角度が増える向きへ動かす。ストッパーと逆へ
+        動く実機だけ ``-1`` にする。リミットスイッチが無いため、mechPosの変化が
+        ``stillness_sec`` の間 ``stillness_deg`` 以下になった時だけ成功にする。
+        """
+        servo = self._servo(name)
+        if not 0.0 < speed_percent <= 100.0:
+            raise ValueError("speed_percent は0より大きく100以下にしてください")
+        if direction not in (-1, 1):
+            raise ValueError("direction は 1 または -1 にしてください")
+        if stillness_deg <= 0.0 or stillness_sec <= 0.0 or timeout_sec <= 0.0:
+            raise ValueError("停止判定とタイムアウトは0より大きくしてください")
+
+        speed = (speed_percent / 100.0) * direction * servo.config.direction
+        deadline = time.monotonic() + timeout_sec
+        quiet_since: float | None = None
+        previous_position: float | None = None
+        latest_position: float | None = None
+
+        print(f"{name}原点合わせ: ストッパーへ {speed_percent:.1f}% で動かします")
+        try:
+            while time.monotonic() < deadline:
+                # PIDを使わず、指定した1台だけを直接低速でストッパーへ動かす。
+                servo.motor.set_velocity(speed, force=True)
+                self.reader.request(name)
+                time.sleep(0.04)
+
+                now = time.monotonic()
+                received_position = False
+                for feedback in self.reader.poll(now):
+                    if feedback.name == name and feedback.position_rad is not None:
+                        latest_position = feedback.position_rad
+                        received_position = True
+
+                # 新しいmechPos応答が無い周期を「停止」と誤認しない。
+                if not received_position or latest_position is None:
+                    continue
+                if previous_position is None:
+                    previous_position = latest_position
+                    continue
+
+                moved_deg = abs((latest_position - previous_position) * 180.0 / 3.141592653589793)
+                previous_position = latest_position
+                if moved_deg <= stillness_deg:
+                    quiet_since = now if quiet_since is None else quiet_since
+                    if now - quiet_since >= stillness_sec:
+                        servo.set_home_radians(latest_position)
+                        print(f"{name}原点合わせ完了: ストッパー位置を0度に登録しました")
+                        return
+                else:
+                    quiet_since = None
+        finally:
+            # 成功・失敗のどちらでも、ストッパーへ押し続けない。
+            servo.motor.stop()
+
+        raise TimeoutError(
+            f"{name}原点合わせ失敗: ストッパーを検出できませんでした。"
+            "方向・配線・速度を確認してください"
+        )
 
     def update(self) -> None:
         """エンコーダーを要求・受信し、両方のPID保持を1回更新する。50Hzで呼ぶ。"""
