@@ -58,7 +58,7 @@ catch_homing_timeout_sec = 3.0
 # 上へ動いてしまった場合だけ、lift_homing_direction を -1 に変える。
 lift_home_to_stop_enabled = True
 lift_homing_speed_percent = 12.0
-lift_homing_direction = -1
+lift_homing_direction = 1
 lift_homing_stillness_deg = 0.2
 lift_homing_stillness_sec = 0.10
 lift_homing_timeout_sec = 3.0
