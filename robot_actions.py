@@ -40,7 +40,7 @@ _configured_pins = set()
 
 
 def setup_gpio():
-    """GAME起動時に1回だけ呼ばれる。両方のGPIOをOFFで開始する。"""
+    """GAME起動時に1回だけ呼ばれる。シリンダーを戻した状態で開始する。"""
     if GPIO is None:
         raise RuntimeError("Hobot.GPIOが見つかりません。RDK X5上で実行してください")
     GPIO.setwarnings(False)
@@ -49,6 +49,11 @@ def setup_gpio():
         if pin is not None:
             GPIO.setup(pin, GPIO.OUT, initial=GPIO.LOW)
             _configured_pins.add(pin)
+
+    # VQZ315Kを2個使う構成: 起動時は「戻す側」だけをONにして待機する。
+    # 2つ同時にONには絶対にしない。
+    GPIO.output(CYLINDER_EXTEND_PIN, GPIO.LOW)
+    GPIO.output(CYLINDER_RETRACT_PIN, GPIO.HIGH)
 
 
 def all_off():
@@ -159,14 +164,14 @@ def ball_lift_for_shot(runtime):
 
 
 def ball_fire(runtime):
-    """GAME2・GAME3共通: ボールを発射する。GPIOの順番はここだけで編集する。"""
+    """GAME2・GAME3共通: 発射後、戻す側をONのままにして戻り位置を保持する。"""
     GPIO.output(CYLINDER_RETRACT_PIN, GPIO.LOW)
     GPIO.output(CYLINDER_EXTEND_PIN, GPIO.HIGH)
     time.sleep(0.05)
     GPIO.output(CYLINDER_EXTEND_PIN, GPIO.LOW)
     GPIO.output(CYLINDER_RETRACT_PIN, GPIO.HIGH)
     time.sleep(0.05)
-    GPIO.output(CYLINDER_RETRACT_PIN, GPIO.LOW)
+    # 戻す側はOFFにしない。待機中もシリンダーを戻った位置に保つ。
     GPIO.output(CYLINDER_EXTEND_PIN, GPIO.LOW)
 
 
