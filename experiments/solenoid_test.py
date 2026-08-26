@@ -1,39 +1,50 @@
-"""robot_actions.pyに書いたエアシリンダー動作を単体確認する。
+"""ソレノイド（エアシリンダー）だけをDualSenseで確認する。
 
-L2: 伸ばす / R2: 戻す / OPTIONS: 両方OFFにして終了
-実行: python3 -m experiments.solenoid_test
+メカナム、CAN、lift、catchは一切開かない。
+
+実行:
+    python3 -m experiments.solenoid_test
+
+操作:
+    R1      発射して、そのまま戻す
+    OPTIONS 両GPIOをOFFにして終了
 """
 
 import time
 
 import robot_actions
-from rox_mecanum import Button, RobotRuntime
+from rox_mecanum import Button, open_configured_dualsense
 
 
 def main() -> None:
-    runtime = None
+    controller = None
+
     try:
-        runtime = RobotRuntime.open()
+        controller = open_configured_dualsense()
         robot_actions.setup_gpio()
-        print("L2: 伸ばす / R2: 戻す / OPTIONS: 終了")
+        print("ソレノイド単体テスト")
+        print("R1: 発射して戻す / OPTIONS: 終了")
 
         while True:
-            state = runtime.controller.read()
+            state = controller.read()
+
             if state.was_pressed(Button.OPTIONS):
-                print("OPTIONS: 停止")
-                robot_actions.all_off()
-                runtime.emergency_stop()
+                print("OPTIONS: 両方OFFにして終了")
                 break
-            if state.was_pressed(Button.L2):
-                robot_actions.game3_cylinder_extend(runtime)
-            if state.was_pressed(Button.R2):
-                robot_actions.game3_cylinder_retract(runtime)
+
+            if state.was_pressed(Button.R1):
+                print("発射して戻します")
+                robot_actions.ball_fire(None)
+
             time.sleep(0.02)
+
+    except KeyboardInterrupt:
+        print("\nCtrl+C: 両方OFFにして終了")
     finally:
         robot_actions.all_off()
-        if runtime is not None:
-            runtime.close()
         robot_actions.close_gpio()
+        if controller is not None:
+            controller.close()
 
 
 if __name__ == "__main__":
