@@ -16,8 +16,9 @@ except ImportError:  # pragma: no cover - RDK X5実機依存
 # ==================================================
 # GPIO番号をここに直接書く。
 # ==================================================
-CYLINDER_EXTEND_PIN = 27
-CYLINDER_RETRACT_PIN = 17
+# 実機配線: GPIO17が発射（伸ばす側）、GPIO27が戻す側。
+CYLINDER_EXTEND_PIN = 17
+CYLINDER_RETRACT_PIN = 27
 lift_orosu = 106
 lift_motiage = 20
 catch_hozi = -40
