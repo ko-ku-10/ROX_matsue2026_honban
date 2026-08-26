@@ -19,6 +19,8 @@ except ImportError:  # pragma: no cover - RDK X5実機依存
 # 実機配線: GPIO17が発射（伸ばす側）、GPIO27が戻す側。
 CYLINDER_EXTEND_PIN = 17
 CYLINDER_RETRACT_PIN = 27
+# 片側をOFFにしてから反対側をONにするまでの安全な待機時間。
+CYLINDER_SWITCH_OFF_SEC = 0.02
 lift_orosu = 106
 lift_motiage = 20
 catch_hozi = -40
@@ -54,6 +56,7 @@ def setup_gpio():
     # VQZ315Kを2個使う構成: 起動時は「戻す側」だけをONにして待機する。
     # 2つ同時にONには絶対にしない。
     GPIO.output(CYLINDER_EXTEND_PIN, GPIO.LOW)
+    time.sleep(CYLINDER_SWITCH_OFF_SEC)
     GPIO.output(CYLINDER_RETRACT_PIN, GPIO.HIGH)
 
 
@@ -166,10 +169,15 @@ def ball_lift_for_shot(runtime):
 
 def ball_fire(runtime):
     """GAME2・GAME3共通: 発射後、戻す側をONのままにして戻り位置を保持する。"""
+    # 戻す側を先にOFFにし、両方OFFの時間を作ってから発射する。
     GPIO.output(CYLINDER_RETRACT_PIN, GPIO.LOW)
+    time.sleep(CYLINDER_SWITCH_OFF_SEC)
     GPIO.output(CYLINDER_EXTEND_PIN, GPIO.HIGH)
     time.sleep(0.05)
+
+    # 発射側をOFFにし、両方OFFの時間を作ってから戻す側へ切り替える。
     GPIO.output(CYLINDER_EXTEND_PIN, GPIO.LOW)
+    time.sleep(CYLINDER_SWITCH_OFF_SEC)
     GPIO.output(CYLINDER_RETRACT_PIN, GPIO.HIGH)
     time.sleep(0.05)
     # 戻す側はOFFにしない。待機中もシリンダーを戻った位置に保つ。
