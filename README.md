@@ -140,3 +140,8 @@ python3 -m pip install --user '.[hardware,vision]'
 ```
 
 カメラ距離を使う自動接近の前に、180 mm AprilTagをカメラ正面1.00mへ置いて `experiments.calibrate_distance` を実行する。表示された値を `camera_hensuu.py` の `camera_focal_length_px` へ入力する。
+
+
+
+# ロボットは１メートル進むのに0.3秒かかる
+

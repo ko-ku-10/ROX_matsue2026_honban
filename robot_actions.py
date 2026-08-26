@@ -232,13 +232,13 @@ def ball_fire(runtime):
     GPIO.output(CYLINDER_RETRACT_PIN, GPIO.LOW)
     time.sleep(CYLINDER_SWITCH_OFF_SEC)
     GPIO.output(CYLINDER_EXTEND_PIN, GPIO.HIGH)
-    time.sleep(0.05)
+    time.sleep(0.5)
 
     # 発射側をOFFにし、両方OFFの時間を作ってから戻す側へ切り替える。
     GPIO.output(CYLINDER_EXTEND_PIN, GPIO.LOW)
     time.sleep(CYLINDER_SWITCH_OFF_SEC)
     GPIO.output(CYLINDER_RETRACT_PIN, GPIO.HIGH)
-    time.sleep(0.05)
+    time.sleep(0.5)
     # 戻す側はOFFにしない。待機中もシリンダーを戻った位置に保つ。
     GPIO.output(CYLINDER_EXTEND_PIN, GPIO.LOW)
 
