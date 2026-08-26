@@ -53,7 +53,9 @@ catch_homing_speed_percent = 15.0
 catch_homing_direction = -1
 catch_homing_stillness_deg = 0.2
 catch_homing_stillness_sec = 0.10
-catch_homing_timeout_sec = 3.0
+# 最大時間。ストッパーへ当たれば0.10秒で終了するため、ここを長くしても
+# 通常の起動は遅くならない。ストッパーまで遠い時の失敗だけを防ぐ。
+catch_homing_timeout_sec = 8.0
 
 # 起動時のlift原点合わせ。地面ドリブル位置の機械ストッパーまで低速で下ろし、
 # mechPosがほぼ変わらなくなった位置を0度にする。

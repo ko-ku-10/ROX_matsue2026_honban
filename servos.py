@@ -117,6 +117,7 @@ class ServoMotors:
         quiet_since: float | None = None
         previous_position: float | None = None
         latest_position: float | None = None
+        feedback_samples = 0
 
         print(f"{name}原点合わせ: ストッパーへ {speed_percent:.1f}% で動かします")
         try:
@@ -132,6 +133,7 @@ class ServoMotors:
                     if feedback.name == name and feedback.position_rad is not None:
                         latest_position = feedback.position_rad
                         received_position = True
+                        feedback_samples += 1
 
                 # 新しいmechPos応答が無い周期を「停止」と誤認しない。
                 if not received_position or latest_position is None:
@@ -154,9 +156,14 @@ class ServoMotors:
             # 成功・失敗のどちらでも、ストッパーへ押し続けない。
             servo.motor.stop()
 
+        if feedback_samples == 0:
+            raise TimeoutError(
+                f"{name}原点合わせ失敗: mechPos応答を1回も受信できませんでした。"
+                "CAN通信・モーター電源を確認してください"
+            )
         raise TimeoutError(
-            f"{name}原点合わせ失敗: ストッパーを検出できませんでした。"
-            "方向・配線・速度を確認してください"
+            f"{name}原点合わせ失敗: {timeout_sec:.1f}秒間mechPosが動き続け、"
+            "ストッパーを検出できませんでした。方向またはストッパー位置を確認してください"
         )
 
     def update(self) -> None:
