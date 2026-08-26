@@ -18,7 +18,8 @@ mecanum_acceleration_percent_per_sec = 300.0
 # 左スティックを上へ倒した時に前進するよう、前後入力だけを反転する。
 # 前後が再び逆なら True / False を切り替える。
 mecanum_invert_forward_input = True
-mecanum_rotation_requires_r2 = True
+# Falseなら右スティック左右だけで旋回する。L2/R2を押す必要はない。
+mecanum_rotation_requires_r2 = False
 
 # catch: CAN ID 5、時間式サーボ
 catch_can_id = 5
