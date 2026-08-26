@@ -6,6 +6,7 @@ CAN通信・PID・メカナムは書かなくてよいですが、lift/catch/GPI
 """
 
 import time
+from dataclasses import dataclass
 
 try:  # PC上で構文確認する時はHobot.GPIOが無くてもよい。
     import Hobot.GPIO as GPIO
@@ -140,34 +141,89 @@ def wait_until_reached(servo, name):
         time.sleep(0.02)
 
 
+@dataclass
+class BallLiftAction:
+    """GAME2・GAME3共通の持上げ動作。update()を繰り返すと少しずつ進む。"""
+
+    runtime: object
+    step: int = 0
+    step_started: float = 0.0
+    normal_lift_speed_percent: float = 0.0
+    finished: bool = False
+
+    def __post_init__(self):
+        self.normal_lift_speed_percent = self.runtime.servos.lift.config.max_speed * 100.0
+        self.runtime.servos.set_pid("lift", max_speed_percent=LIFT_MOVE_SPEED_PERCENT)
+        self.step_started = time.monotonic()
+        self._send_step_target()
+
+    def _steps(self):
+        servos = self.runtime.servos
+        return (
+            (servos.lift, lift_orosu, "liftを下ろす"),
+            (servos.catch, catch_motiage, "catchを持上げ用の角度にする"),
+            (servos.lift, lift_motiage, "liftで発射台へ運ぶ"),
+            (servos.catch, catch_machi, "catchで発射台へ載せる"),
+            (servos.lift, lift_orosu, "liftを下ろす"),
+        )
+
+    def _send_step_target(self):
+        servo, angle, name = self._steps()[self.step]
+        servo.write(angle)
+        print(f"持上げ {self.step + 1}/5: {name} ({angle}度)")
+
+    def update(self):
+        """1回だけ到達を確認する。完了した時だけTrueを返す。"""
+        if self.finished:
+            return True
+
+        servo, _angle, name = self._steps()[self.step]
+        if is_within_move_tolerance(servo):
+            self.step += 1
+            if self.step >= len(self._steps()):
+                self.finish()
+                print("持上げ動作が完了しました")
+                return True
+            self.step_started = time.monotonic()
+            self._send_step_target()
+        elif time.monotonic() - self.step_started >= SERVO_MOVE_TIMEOUT_SEC:
+            print(f"{name}: 到達確認なし。次の動作へ進みます")
+            self.step += 1
+            if self.step >= len(self._steps()):
+                self.finish()
+                return True
+            self.step_started = time.monotonic()
+            self._send_step_target()
+        return False
+
+    def finish(self):
+        """持上げ中だけ上げたliftの速度上限を通常値へ戻す。"""
+        if not self.finished:
+            self.runtime.servos.set_pid("lift", max_speed_percent=self.normal_lift_speed_percent)
+            self.finished = True
+
+    def cancel(self):
+        """途中動作を終了する。機構を戻す角度の命令は呼び出し側が出す。"""
+        self.finish()
+
+
+def start_ball_lift_for_shot(runtime):
+    """中断可能な持上げ動作を開始する。GAME2・GAME3から使う。"""
+    return BallLiftAction(runtime)
+
+
+def cancel_ball_lift_for_shot(action, runtime):
+    """×で持上げを中断し、ボールを地面で保持する姿勢へ戻す。"""
+    action.cancel()
+    runtime.servos.lift.write(lift_orosu)
+    runtime.servos.catch.write(catch_hozi)
+
+
 def ball_lift_for_shot(runtime):
-    """GAME2・GAME3共通: ボールを発射する高さへ動かす。"""
-    servos = runtime.servos
-    normal_lift_speed_percent = servos.lift.config.max_speed * 100.0
-
-    # 持上げ中だけ強くする。通常のPID保持を強くし過ぎないため。
-    servos.set_pid("lift", max_speed_percent=LIFT_MOVE_SPEED_PERCENT)
-
-    try:
-        # 各行で目標を出し、エンコーダーが「届いた」と確認してから次へ進む。
-        servos.lift.write(lift_orosu)
-        wait_until_reached(servos.lift, "liftを下ろす")
-
-        # 持上げ用の角度にしてから、ボールを発射台へ運ぶ。
-        servos.catch.write(catch_motiage)
-        wait_until_reached(servos.catch, "catchを持上げ用の角度にする")
-
-        servos.lift.write(lift_motiage)
-        wait_until_reached(servos.lift, "liftで発射台へ運ぶ")
-
-        servos.catch.write(catch_machi)
-        wait_until_reached(servos.catch, "catchで発射台へ載せる")
-
-        servos.lift.write(lift_orosu)
-        wait_until_reached(servos.lift, "liftを下ろす")
-    finally:
-        # 次の待機中にガタガタしないよう、通常の保持上限へ戻す。
-        servos.set_pid("lift", max_speed_percent=normal_lift_speed_percent)
+    """互換用の待機型持上げ。GAME本体ではstart_ball_lift_for_shot()を使う。"""
+    action = start_ball_lift_for_shot(runtime)
+    while not action.update():
+        time.sleep(0.02)
 
 
 def ball_fire(runtime):

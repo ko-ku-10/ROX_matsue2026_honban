@@ -27,11 +27,12 @@ class Stage(str, Enum):
     DRIVE = "ドリブル走行可能"
     GRAB = "catchを掴む角度へ移動中"
     RELEASE = "catchを排出角度へ移動中"
+    LIFTING = "発射台へ持上げ中（CREATEでリセット）"
     FIRED = "動作完了: ×で地面姿勢へ戻す"
 
 
 def main() -> None:
-    print("GAME3: CREATE=地面姿勢 / ○=掴む / □=排出 / △=持上げ / R1=発射 / OPTIONS=停止")
+    print("GAME3: CREATE=地面姿勢・持上げ中リセット / ○=掴む / □=排出 / △=持上げ / R1=発射 / OPTIONS=停止")
     runtime = None
 
     try:
@@ -40,6 +41,7 @@ def main() -> None:
 
         stage = Stage.WAIT
         move_started = time.monotonic()
+        lift_action = None
         shown_stage = None
         while True:
             loop_started = time.monotonic()
@@ -56,8 +58,17 @@ def main() -> None:
             if state.was_pressed(Button.R1):
                 robot_actions.ball_fire(runtime)
 
-            # CREATE または ×: 地面走行姿勢へ戻す。
-            if state.was_pressed(Button.CREATE) or state.was_pressed(Button.CROSS):
+            # CREATE: 地面走行姿勢へ戻す。持上げ中なら即時中断する。
+            if state.was_pressed(Button.CREATE):
+                if lift_action is not None:
+                    robot_actions.cancel_ball_lift_for_shot(lift_action, runtime)
+                    lift_action = None
+                robot_actions.game3_ground_pose(runtime)
+                stage = Stage.GROUND
+                move_started = loop_started
+
+            # ×は持上げが終わった後だけ、地面走行姿勢へ戻す。
+            elif state.was_pressed(Button.CROSS) and lift_action is None:
                 robot_actions.game3_ground_pose(runtime)
                 stage = Stage.GROUND
                 move_started = loop_started
@@ -76,7 +87,12 @@ def main() -> None:
 
             # △: GAME2と共通の持上げ動作。
             elif state.was_pressed(Button.TRIANGLE):
-                robot_actions.ball_lift_for_shot(runtime)
+                lift_action = robot_actions.start_ball_lift_for_shot(runtime)
+                stage = Stage.LIFTING
+
+            # 持上げ中も毎周期×を読める。完了時だけ発射可能へ進む。
+            if lift_action is not None and lift_action.update():
+                lift_action = None
                 stage = Stage.FIRED
 
             # 地面姿勢へ両方が到着した時だけ、スティック走行を許可する。

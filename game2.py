@@ -56,7 +56,7 @@ SHOT_DISTANCE_M = {
 }
 
 def main() -> None:
-    print("GAME2: タッチパッド=手動/自動, CREATE=照準, △=持上げ, L2=発射, ×=後退, OPTIONS=停止")
+    print("GAME2: タッチパッド=手動/自動, CREATE=照準/持上げ中リセット, △=持上げ, L2=発射, ×=後退, OPTIONS=停止")
     runtime = None
     camera = None
 
@@ -80,6 +80,7 @@ def main() -> None:
         target_ids = None
         target_row = None
         retreat_until = 0.0
+        lift_action = None
         shown_stage = None
 
         while True:
@@ -102,6 +103,9 @@ def main() -> None:
 
             # タッチパッドで完全手動 / 自動を切り替える。
             if mode.update(state):
+                if lift_action is not None:
+                    robot_actions.cancel_ball_lift_for_shot(lift_action, runtime)
+                    lift_action = None
                 runtime.servos.hold_all_current()
                 stage = "補給待ち: CREATEで照準開始"
                 target_ids = None
@@ -163,17 +167,25 @@ def main() -> None:
 
                 # △: GAME3と共通の持上げ動作。
                 elif stage == "照準完了: △で持上げ" and state.was_pressed(Button.TRIANGLE):
-                    robot_actions.ball_lift_for_shot(runtime)
-                    lift_started = loop_started
+                    lift_action = robot_actions.start_ball_lift_for_shot(runtime)
                     stage = "発射高さへ持上げ中"
 
                 elif stage == "発射高さへ持上げ中":
-                    if runtime.servos.lift.is_at_target():
+                    # 持上げ中だけCREATEは「スクリーンショット側のボタンでリセット」。
+                    # 通常時のCREATEは、従来どおり照準開始に使う。
+                    if state.was_pressed(Button.CREATE):
+                        robot_actions.cancel_ball_lift_for_shot(lift_action, runtime)
+                        lift_action = None
+                        target_ids = None
+                        target_row = None
+                        stage = "リセット中: 地面ドリブル姿勢へ"
+                    elif lift_action is not None and lift_action.update():
+                        lift_action = None
                         stage = "発射準備完了: L2で発射"
-                    elif loop_started - lift_started > LIFT_TIMEOUT_SEC:
-                        print("liftが発射高さに到達しません。安全停止します")
-                        runtime.emergency_stop()
-                        break
+
+                elif stage == "リセット中: 地面ドリブル姿勢へ":
+                    if runtime.servos.catch.is_at_target() and runtime.servos.lift.is_at_target():
+                        stage = "補給待ち: CREATEで照準開始"
 
                 # L2: GAME3と共通の発射動作を実行する。
                 elif stage == "発射準備完了: L2で発射" and state.was_pressed(Button.L2):

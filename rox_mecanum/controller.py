@@ -369,8 +369,15 @@ def open_configured_dualsense() -> PygameDualSense:
     """hensuu.pyのBluetooth設定を使い、DualSenseを開く。"""
     import hensuu
 
+    mode = hensuu.dualsense_connection_mode
+    if mode not in {"connect_each_run", "keep_connected"}:
+        raise ValueError(
+            "dualsense_connection_mode は 'connect_each_run' または "
+            "'keep_connected' にしてください"
+        )
+
     return PygameDualSense.open(
         bluetooth_address=hensuu.dualsense_mac_address,
         connect_timeout_sec=hensuu.dualsense_connect_timeout_sec,
-        disconnect_on_close=hensuu.dualsense_disconnect_on_close,
+        disconnect_on_close=(mode == "connect_each_run"),
     )
