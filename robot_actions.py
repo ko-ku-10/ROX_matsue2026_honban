@@ -42,7 +42,7 @@ SERVO_MOVE_TOLERANCE_DEG = 3.0
 
 # 持上げ中だけ使うliftの強さ。大きくするほど速く強く動く。
 # 持上げ終了後は、hensuu.py の通常PID上限へ自動で戻る。
-LIFT_MOVE_SPEED_PERCENT = 40.0
+LIFT_MOVE_SPEED_PERCENT = 100
 _configured_pins = set()
 
 
