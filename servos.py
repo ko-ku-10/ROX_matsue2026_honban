@@ -121,10 +121,11 @@ class ServoMotors:
             raise ValueError("停止判定とタイムアウトは0より大きくしてください")
 
         speed = (speed_percent / 100.0) * direction * servo.config.direction
-        # 前の機構の停止フレームに対するAT応答を持ち越さない。
-        # 特にcatch原点合わせ完了直後のlift原点合わせで重要。
-        self.reader.discard_pending()
         deadline = time.monotonic() + timeout_sec
+        # 毎周期の速度フレームはmechPos要求より多くなり、USB-AT変換器が
+        # 応答を落とすことがある。最初に動かし、以後は0.25秒ごとだけ
+        # 再送する。モーターは最後の速度指令を保持する仕様を使う。
+        next_speed_refresh = 0.0
         quiet_since: float | None = None
         previous_position: float | None = None
         latest_position: float | None = None
@@ -133,10 +134,14 @@ class ServoMotors:
         print(f"{name}原点合わせ: ストッパーへ {speed_percent:.1f}% で動かします")
         try:
             while time.monotonic() < deadline:
+                now = time.monotonic()
                 # PIDを使わず、指定した1台だけを直接低速でストッパーへ動かす。
-                servo.motor.set_velocity(speed, force=True)
+                if now >= next_speed_refresh:
+                    servo.motor.set_velocity(speed, force=True)
+                    next_speed_refresh = now + 0.25
                 self.reader.request(name)
-                time.sleep(0.04)
+                # 成功しているangle_monitor.pyと同じ15ms待機で受信する。
+                time.sleep(0.015)
 
                 now = time.monotonic()
                 received_position = False
@@ -147,22 +152,22 @@ class ServoMotors:
                         feedback_samples += 1
 
                 # 新しいmechPos応答が無い周期を「停止」と誤認しない。
-                if not received_position or latest_position is None:
-                    continue
-                if previous_position is None:
-                    previous_position = latest_position
-                    continue
-
-                moved_deg = abs((latest_position - previous_position) * 180.0 / 3.141592653589793)
-                previous_position = latest_position
-                if moved_deg <= stillness_deg:
-                    quiet_since = now if quiet_since is None else quiet_since
-                    if now - quiet_since >= stillness_sec:
-                        servo.set_home_radians(latest_position)
-                        print(f"{name}原点合わせ完了: ストッパー位置を0度に登録しました")
-                        return
-                else:
-                    quiet_since = None
+                if received_position and latest_position is not None:
+                    if previous_position is None:
+                        previous_position = latest_position
+                    else:
+                        moved_deg = abs((latest_position - previous_position) * 180.0 / 3.141592653589793)
+                        previous_position = latest_position
+                        if moved_deg <= stillness_deg:
+                            quiet_since = now if quiet_since is None else quiet_since
+                            if now - quiet_since >= stillness_sec:
+                                servo.set_home_radians(latest_position)
+                                print(f"{name}原点合わせ完了: ストッパー位置を0度に登録しました")
+                                return
+                        else:
+                            quiet_since = None
+                # 次のmechPos要求を詰め込みすぎない。
+                time.sleep(0.015)
         finally:
             # 成功・失敗のどちらでも、ストッパーへ押し続けない。
             servo.motor.stop()
