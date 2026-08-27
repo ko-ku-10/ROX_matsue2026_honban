@@ -98,16 +98,16 @@ servo_pid_kd = 0.000
 servo_pid_integral_limit = 30.0
 # 保持の初回確認は低速から。安定後に必要なら少しずつ上げる。
 # 1周期で1台ずつ読む。USB-AT変換器の応答を安定させるため、100Hzなら
-# USB-AT変換器の応答待ちを優先し、全体50Hzで交互に要求する。
-# catch/liftはそれぞれ約25Hzで実測角度を更新する。
+# USB-AT変換器の応答待ちを優先し、全体60Hzで交互に要求する。
+# catch/liftはそれぞれ約30Hzで実測角度を更新する。
 # ±0.2°を超えた直後から低速で戻す。力を受けた直後の位置ずれを小さくする。
 servo_max_speed_percent = 8.0
 # mechanism_manual実験で目標角度へ動かす時だけ使う上限。保持用の3%とは分ける。
 mechanism_move_speed_percent = 10.0
 servo_tolerance_deg = 0.2
-encoder_poll_hz = 50.0
+encoder_poll_hz = 60.0
 # この時間mechPos応答が来なければ保持出力を停止する（角度の推定はしない）。
-servo_feedback_timeout_sec = 0.50
+servo_feedback_timeout_sec = 0.25
 
 # 状態表示サイト: http://ロボットのIPアドレス:8000
 dashboard_port = 8000
