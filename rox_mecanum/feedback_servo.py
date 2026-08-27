@@ -346,7 +346,10 @@ class EncoderPositionServo:
             self._last_update = now
             self.last_feedback_at = now
             self.last_command = 0.0
-            self.motor.set_velocity(0.0, force=True)
+            # ATMotorは前回と同じ速度を送らない。目標に着いた後も毎回
+            # 停止フレームを送ると、mechPos要求・応答より送信が多くなり、
+            # USB-AT変換器が応答を落とす原因になる。
+            self.motor.set_velocity(0.0)
             return 0.0
         dt = 0.0 if self._last_update is None else max(0.001, now - self._last_update)
         derivative = 0.0 if dt == 0.0 else (error - self._last_error) / dt
@@ -357,7 +360,9 @@ class EncoderPositionServo:
             )
         speed = self.config.kp * error + self.config.ki * self._integral + self.config.kd * derivative
         speed = max(-self.config.max_speed, min(self.config.max_speed, speed))
-        self.motor.set_velocity(speed * self.config.direction, force=True)
+        # 同じ補正速度が続く時は、モーターが保持している速度指令を使う。
+        # メカナムと同じく、値が変わった時だけ送信すればよい。
+        self.motor.set_velocity(speed * self.config.direction)
         self._last_error = error
         self._last_update = now
         self.last_feedback_at = now

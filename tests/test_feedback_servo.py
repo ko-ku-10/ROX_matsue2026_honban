@@ -101,7 +101,7 @@ class FeedbackServoTests(unittest.TestCase):
         # 現在9°は目標10°との差が1°なので、出力しない。
         command = servo.update(1900, 1.0)
         self.assertEqual(command, 0.0)
-        self.assertEqual(motor.speeds[-1], (0.0, True))
+        self.assertEqual(motor.speeds[-1], (0.0, False))
 
     def test_pid_on_off_aliases(self):
         motor = FakeMotor()
