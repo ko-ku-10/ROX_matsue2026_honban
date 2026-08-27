@@ -1,7 +1,7 @@
 import unittest
 from struct import pack
 
-from rox_mecanum.feedback_servo import ATEncoderReader, EncoderPositionServo, PositionServoConfig, build_encoder_read_command
+from rox_mecanum.feedback_servo import ATEncoderReader, EncoderPositionServo, PositionServoConfig, _take_at_frames, build_encoder_read_command
 
 
 class FakeTransport:
@@ -66,6 +66,13 @@ class FeedbackServoTests(unittest.TestCase):
         feedback = reader.poll(now=1.0)[0]
         self.assertAlmostEqual(feedback.position_rad, 1.5)
         self.assertIsNone(feedback.count)
+
+    def test_parser_recovers_after_invalid_at_length(self):
+        # 壊れたヘッダーが前にあっても、後ろの正しいATフレームを読める。
+        valid = bytes.fromhex("41 54 10 00 2f 2c 08 34 12 00 00 00 00 00 00 0d 0a")
+        frames = _take_at_frames(bytearray(b"AT\x00\x00\x00\x00\xff" + valid))
+        self.assertEqual(len(frames), 1)
+        self.assertEqual(frames[0][1][:2], bytes((0x34, 0x12)))
 
     def test_position_servo_corrects_external_displacement(self):
         motor = FakeMotor()

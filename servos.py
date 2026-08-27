@@ -115,6 +115,9 @@ class ServoMotors:
             raise ValueError("停止判定とタイムアウトは0より大きくしてください")
 
         speed = (speed_percent / 100.0) * direction * servo.config.direction
+        # 前の機構の停止フレームに対するAT応答を持ち越さない。
+        # 特にcatch原点合わせ完了直後のlift原点合わせで重要。
+        self.reader.discard_pending()
         deadline = time.monotonic() + timeout_sec
         quiet_since: float | None = None
         previous_position: float | None = None

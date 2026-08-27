@@ -83,6 +83,16 @@ class ATEncoderReader:
         self._next_address_index = (self._next_address_index + 1) % len(self._cycle_addresses)
         self.transport.write(build_encoder_read_command(address))
 
+    def discard_pending(self) -> None:
+        """前のモーター操作に対する古いAT応答を捨てる。
+
+        原点合わせではcatchを止めた直後にliftへ切り替える。停止応答が残った
+        ままだと、次の機構の正式mechPos応答を待つ処理へ混ざるため、切替時だけ
+        受信バッファを空にする。
+        """
+        self._buffer.clear()
+        self.transport.read_available()
+
     def poll(self, now: float | None = None) -> list[EncoderFeedback]:
         self._buffer.extend(self.transport.read_available())
         timestamp = monotonic() if now is None else now
@@ -435,6 +445,11 @@ def _take_at_frames(buffer: bytearray) -> list[tuple[int, bytes]]:
         if len(buffer) < 9:
             break
         data_length = buffer[6]
+        # このAT変換器で扱うCANデータ長は0〜8だけ。壊れたヘッダーの大きな
+        # 長さを信じて待ち続けると、後ろに届いた正式mechPosを永久に読めない。
+        if data_length > 8:
+            del buffer[0]
+            continue
         total = 7 + data_length + 2
         if len(buffer) < total:
             break
