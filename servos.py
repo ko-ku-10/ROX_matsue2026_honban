@@ -81,22 +81,19 @@ class ServoMotors:
         """正式なmechPosを読み取るだけで、原点・PID目標は変更しない。"""
         if not names or any(name not in {"catch", "lift"} for name in names):
             raise ValueError("names は catch/lift を1台以上指定してください")
-        # 有効化・停止に対する古いAT応答を、今回の角度として採用しない。
-        self.reader.discard_pending()
         deadline = time.monotonic() + timeout_sec
         values: dict[str, EncoderFeedback] = {}
         while time.monotonic() < deadline and len(values) < len(names):
-            # AT変換器が応答を落とさないよう、初期化では1台ずつ50ms待つ。
-            for name in names:
-                if name in values:
-                    continue
-                self.reader.request(name)
-                time.sleep(0.05)
-                for feedback in self.reader.poll():
-                    # attach()直後には有効化・停止に対する旧ステータス応答も来る。
-                    # 原点には正式なmechPos(0x7019 float)だけを絶対に採用する。
-                    if feedback.name in names and feedback.position_rad is not None:
-                        values[feedback.name] = feedback
+            # angle_monitor.py と同じ手順。USB-AT変換器へcatch/liftを交互に
+            # 要求して15ms待ってから受信する。この実機で両方のmechPosが読める
+            # ことを確認済みの通信間隔である。
+            self.reader.request_next()
+            time.sleep(0.015)
+            for feedback in self.reader.poll():
+                # 原点には正式なmechPos(0x7019 float)だけを絶対に採用する。
+                if feedback.name in names and feedback.position_rad is not None:
+                    values[feedback.name] = feedback
+            time.sleep(0.015)
         if set(values) != set(names):
             requested = "/".join(names)
             raise TimeoutError(f"{requested}のエンコーダー応答を受信できませんでした")
