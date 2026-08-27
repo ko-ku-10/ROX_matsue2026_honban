@@ -37,7 +37,8 @@ TAG_ROTATE_MAX_SPEED = 0.20
 
 # Tag 8を中央へ合わせた後に、まっすぐ進む設定。
 # 実機で測って、この2つだけを書き換える。
-TAG8_FORWARD_SPEED = 0.20
+# この機体では負の値が「ゲートへ進む」向き。
+TAG8_FORWARD_SPEED = -0.20
 TAG8_FORWARD_SEC = 2.0
 
 
