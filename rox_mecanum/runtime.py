@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
 import hensuu
 
 from .ball_mechanism import set_transport_pose, transport_pose_ready
@@ -45,19 +44,26 @@ class RobotRuntime:
         try:
             mecanum.enable_all(retries=3, interval=0.05)
             servos.attach()
-            # 起動ごとにストッパーへ押し付けない。初回に手で決めた物理0度を
-            # save_servo_origins.py で保存しておき、以後はその実測mechPosを原点にする。
-            origin_path = Path(hensuu.servo_origin_file)
-            if not servos.load_origins(origin_path):
-                raise RuntimeError(
-                    f"保存原点がありません: {origin_path}。"
-                    "機構を物理0度へ合わせてから python3 save_servo_origins.py を1回実行してください"
-                )
-            print(f"保存原点を読み込みました: {origin_path}")
-            # start_pid() は更新スレッドを始めるだけで保持をオンにしない。
-            # 保存原点(0°)を明示的な目標にしてから開始する。
-            servos.catch.write(0.0)
-            servos.lift.write(0.0)
+            # catch/liftをそれぞれ機械ストッパーまで自動で動かし、mechPosの変化が
+            # 止まった位置を0度として登録する。保存済みの原点は使わない。
+            servos.home_to_stop(
+                "catch",
+                speed_percent=hensuu.catch_homing_speed_percent,
+                direction=hensuu.catch_homing_direction,
+                stillness_deg=hensuu.catch_homing_stillness_deg,
+                stillness_sec=hensuu.catch_homing_stillness_sec,
+                timeout_sec=hensuu.catch_homing_timeout_sec,
+            )
+            servos.home_to_stop(
+                "lift",
+                speed_percent=hensuu.lift_homing_speed_percent,
+                direction=hensuu.lift_homing_direction,
+                stillness_deg=hensuu.lift_homing_stillness_deg,
+                stillness_sec=hensuu.lift_homing_stillness_sec,
+                timeout_sec=hensuu.lift_homing_timeout_sec,
+            )
+            # 原点登録した現在位置を目標にしてからPIDを開始する。
+            servos.hold_all_current()
             servos.start_pid()
             return cls(
                 controller=controller,

@@ -2,11 +2,8 @@
 
 from __future__ import annotations
 
-import json
-import math
 import time
 from dataclasses import dataclass
-from pathlib import Path
 from threading import Event, Lock, Thread, current_thread
 
 import hensuu
@@ -98,41 +95,6 @@ class ServoMotors:
             requested = "/".join(names)
             raise TimeoutError(f"{requested}のエンコーダー応答を受信できませんでした")
         return values
-
-    def save_origins(self, path: str | Path, timeout_sec: float = 5.0) -> None:
-        """今の実測mechPosを、次回起動用の機械原点として保存する。
-
-        この関数は位置を動かさない。呼ぶ前に、catch/liftを人が決めた
-        物理的な0度位置（通常は各ストッパー）へ安全に合わせておく。
-        """
-        values = self.read_mech_positions(timeout_sec=timeout_sec)
-        origin_path = Path(path)
-        data = {
-            "format": 1,
-            "catch_zero_rad": values["catch"].position_rad,
-            "lift_zero_rad": values["lift"].position_rad,
-        }
-        origin_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
-
-    def load_origins(self, path: str | Path) -> bool:
-        """保存済みの機械原点を読み込む。原点ファイルが無ければFalse。"""
-        origin_path = Path(path)
-        if not origin_path.is_file():
-            return False
-        try:
-            data = json.loads(origin_path.read_text(encoding="utf-8"))
-            catch_zero = float(data["catch_zero_rad"])
-            lift_zero = float(data["lift_zero_rad"])
-        except (OSError, ValueError, KeyError, TypeError) as error:
-            raise RuntimeError(
-                f"保存原点ファイルを読めません: {origin_path}。"
-                "python3 save_servo_origins.py で作り直してください"
-            ) from error
-        if not math.isfinite(catch_zero) or not math.isfinite(lift_zero):
-            raise RuntimeError(f"保存原点ファイルの値が不正です: {origin_path}")
-        self.catch.set_home_radians(catch_zero)
-        self.lift.set_home_radians(lift_zero)
-        return True
 
     def home_to_stop(
         self,
