@@ -32,6 +32,8 @@ class ServoMotors:
         self._lock = Lock()
         self._stop_event = Event()
         self._thread: Thread | None = None
+        # PIDスレッド内で起きた最後の通信例外。画面表示や原因確認に使える。
+        self._pid_error: str | None = None
 
     def attach(self) -> None:
         """2台を停止状態で有効化する。前回の速度指令による急発進を防ぐ。"""
@@ -178,8 +180,16 @@ class ServoMotors:
                     self.lift.update_feedback(feedback)
             self.reader.request_next()
             # 応答が消えた時、古い速度を出し続けないための安全停止。
-            self.catch.watchdog(now)
-            self.lift.watchdog(now)
+            if self.catch.watchdog(now):
+                print(
+                    "catch PID安全停止: "
+                    f"{self.catch.config.feedback_timeout_sec:.2f}秒間mechPos応答がありません"
+                )
+            if self.lift.watchdog(now):
+                print(
+                    "lift PID安全停止: "
+                    f"{self.lift.config.feedback_timeout_sec:.2f}秒間mechPos応答がありません"
+                )
 
     def start_pid(self, hz: float | None = None) -> None:
         """PID更新をバックグラウンドで開始する。以後 ``update()`` は不要。"""
@@ -200,10 +210,42 @@ class ServoMotors:
         self._thread = None
 
     def _pid_loop(self, interval: float) -> None:
+        last_reported_error: str | None = None
         while not self._stop_event.is_set():
             started = time.monotonic()
-            self.update()
-            self._stop_event.wait(max(0.0, interval - (time.monotonic() - started)))
+            try:
+                self.update()
+                if self._pid_error is not None:
+                    print("サーボPID通信が復帰しました")
+                self._pid_error = None
+                last_reported_error = None
+            except Exception as error:
+                # 以前は、ここで1回でもpyserialの例外が起きるとPIDスレッドが
+                # 終了し、以後catch/liftが動かなくなっていた。出力は安全に止め、
+                # 次周期以降に角度通信の復帰を試す。
+                self._pid_error = f"{type(error).__name__}: {error}"
+                if self._pid_error != last_reported_error:
+                    print(f"サーボPID通信エラー: {self._pid_error}")
+                    print("角度通信が復帰するまでcatch/liftの出力を停止します")
+                    last_reported_error = self._pid_error
+                for servo in (self.catch, self.lift):
+                    servo.last_command = 0.0
+                    try:
+                        # release()にはせず、通信が戻れば同じ目標角度のPIDを再開する。
+                        servo.motor.stop()
+                    except Exception:
+                        pass
+
+            # 例外時も最低0.1秒だけ待つ。通信断中に送信を連打しない。
+            elapsed = time.monotonic() - started
+            wait = max(0.0, interval - elapsed)
+            if self._pid_error is not None:
+                wait = max(wait, 0.1)
+            self._stop_event.wait(wait)
+
+    def pid_error(self) -> str | None:
+        """PID通信スレッドの直近エラー。正常動作中はNone。"""
+        return self._pid_error
 
     def release(self) -> None:
         """2台ともPID保持を解除して停止する。"""
