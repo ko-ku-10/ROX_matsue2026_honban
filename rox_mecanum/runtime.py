@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 import hensuu
 
 from .ball_mechanism import set_transport_pose, transport_pose_ready
@@ -44,36 +45,19 @@ class RobotRuntime:
         try:
             mecanum.enable_all(retries=3, interval=0.05)
             servos.attach()
-            # catchは開く側、liftは地面ドリブル位置のストッパーで原点を作る。
-            # 動作方向を間違えた場合は hensuu.py の *_homing_direction だけを反転する。
-            if hensuu.catch_home_to_stop_enabled:
-                servos.home_to_stop(
-                    "catch",
-                    speed_percent=hensuu.catch_homing_speed_percent,
-                    direction=hensuu.catch_homing_direction,
-                    stillness_deg=hensuu.catch_homing_stillness_deg,
-                    stillness_sec=hensuu.catch_homing_stillness_sec,
-                    timeout_sec=hensuu.catch_homing_timeout_sec,
+            # 起動ごとにストッパーへ押し付けない。初回に手で決めた物理0度を
+            # save_servo_origins.py で保存しておき、以後はその実測mechPosを原点にする。
+            origin_path = Path(hensuu.servo_origin_file)
+            if not servos.load_origins(origin_path):
+                raise RuntimeError(
+                    f"保存原点がありません: {origin_path}。"
+                    "機構を物理0度へ合わせてから python3 save_servo_origins.py を1回実行してください"
                 )
-            else:
-                print("catchの現在角度を起動時の0度として登録します")
-                servos.home_from_feedback(names=("catch",))
-
-            if hensuu.lift_home_to_stop_enabled:
-                servos.home_to_stop(
-                    "lift",
-                    speed_percent=hensuu.lift_homing_speed_percent,
-                    direction=hensuu.lift_homing_direction,
-                    stillness_deg=hensuu.lift_homing_stillness_deg,
-                    stillness_sec=hensuu.lift_homing_stillness_sec,
-                    timeout_sec=hensuu.lift_homing_timeout_sec,
-                )
-            else:
-                print("liftの現在角度を起動時の0度として登録します")
-                servos.home_from_feedback(names=("lift",))
-            # start_pid() は更新スレッドを始めるだけで保持はオンにしない。
-            # 原点登録した現在位置を明示的に目標にしてから開始する。
-            servos.hold_all_current()
+            print(f"保存原点を読み込みました: {origin_path}")
+            # start_pid() は更新スレッドを始めるだけで保持をオンにしない。
+            # 保存原点(0°)を明示的な目標にしてから開始する。
+            servos.catch.write(0.0)
+            servos.lift.write(0.0)
             servos.start_pid()
             return cls(
                 controller=controller,

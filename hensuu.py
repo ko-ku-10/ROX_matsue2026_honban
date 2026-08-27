@@ -45,27 +45,11 @@ lift_90deg_time_sec = 0.124
 lift_direction = 1
 lift_brake_time_sec = 0.08
 
-# 起動時のcatch原点合わせ。開く側の機械ストッパーまで動かし、
-# mechPosがほぼ変わらなくなった位置を0度にする。
-# 閉じる向きへ動いてしまった場合だけ、catch_homing_direction を -1 に変える。
-catch_home_to_stop_enabled = True
-catch_homing_speed_percent = 15.0
-catch_homing_direction = -1
-catch_homing_stillness_deg = 0.2
-catch_homing_stillness_sec = 0.10
-# 最大時間。ストッパーへ当たれば0.10秒で終了するため、ここを長くしても
-# 通常の起動は遅くならない。ストッパーまで遠い時の失敗だけを防ぐ。
-catch_homing_timeout_sec = 8.0
-
-# 起動時のlift原点合わせ。地面ドリブル位置の機械ストッパーまで低速で下ろし、
-# mechPosがほぼ変わらなくなった位置を0度にする。
-# 上へ動いてしまった場合だけ、lift_homing_direction を -1 に変える。
-lift_home_to_stop_enabled = True
-lift_homing_speed_percent = 12.0
-lift_homing_direction = 1
-lift_homing_stillness_deg = 0.2
-lift_homing_stillness_sec = 0.10
-lift_homing_timeout_sec = 3.0
+# サーボ原点。起動時にストッパーまで動かして原点合わせはしない。
+# 初回だけ、機構を手で物理0度（通常はストッパー位置）へ合わせてから
+# ``python3 save_servo_origins.py`` を実行する。その時の実測mechPosをここで指定した
+# ファイルへ保存し、GAME1〜3は同じ原点を読む。
+servo_origin_file = "servo_origins.json"
 
 # ボールを扱う時の共通角度（全GAME共通）
 # ボールを持って走る間は、必ず hold と ground の姿勢にする。
