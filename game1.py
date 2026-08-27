@@ -67,7 +67,9 @@ RETURN_THROUGH_SEC = 10
 
 
 def main() -> None:
-    print("GAME1: タッチパッド=手動/自動, CREATE=展開, △=Tag8へ, ○=トンネル通過, R1長押し=板を押す, ×=上がった確認, L2=帰還")
+    print("GAME1: タッチパッド=手動/自動")
+    print("  手動: CREATE/×=地面姿勢, ○=掴む, □=排出, R1=発射（△の持上げは無効）")
+    print("  自動: CREATE=展開, △=Tag8へ, ○=トンネル通過, R1長押し=板を押す, ×=上がった確認, L2=帰還")
     runtime = None
     camera = None
 
@@ -123,6 +125,24 @@ def main() -> None:
 
             if camera_error:
                 stage = "自動停止: カメラエラー"
+
+            # 完全手動ではGAME3と同じ基本操作を使える。
+            # ただしGAME1では△の持上げ動作だけは絶対に実行しない。
+            if not mode.auto_enabled:
+                if state.was_pressed(Button.R1):
+                    robot_actions.ball_fire(runtime)
+                    stage = "完全手動: 発射"
+                elif state.was_pressed(Button.CREATE) or state.was_pressed(Button.CROSS):
+                    robot_actions.game3_ground_pose(runtime)
+                    stage = "完全手動: 地面走行姿勢へ"
+                elif state.was_pressed(Button.CIRCLE):
+                    robot_actions.game3_grab(runtime)
+                    stage = "完全手動: 掴む姿勢"
+                elif state.was_pressed(Button.SQUARE):
+                    robot_actions.game3_release(runtime)
+                    stage = "完全手動: 排出姿勢"
+                elif state.was_pressed(Button.TRIANGLE):
+                    print("GAME1手動: △の持上げ動作は無効です")
 
             if mode.auto_enabled and not camera_error:
                 # CREATE: スタート時のサイズ用の姿勢へ移動する。

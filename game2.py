@@ -56,7 +56,9 @@ SHOT_DISTANCE_M = {
 }
 
 def main() -> None:
-    print("GAME2: タッチパッド=手動/自動, CREATE=照準/持上げ中リセット, △=持上げ, L2=発射, ×=後退, OPTIONS=停止")
+    print("GAME2: タッチパッド=手動/自動")
+    print("  手動: CREATE/×=地面姿勢, ○=掴む, □=排出, △=持上げ, R1=発射")
+    print("  自動: CREATE=照準/持上げ中リセット, △=持上げ, L2=発射, ×=後退")
     runtime = None
     camera = None
 
@@ -117,6 +119,35 @@ def main() -> None:
 
             if camera_error:
                 stage = "自動停止: カメラエラー"
+
+            # 完全手動中はGAME3と同じ機構操作を使える。
+            # カメラや自動照準の状態に関係なく、スティック走行もできる。
+            if not mode.auto_enabled:
+                if state.was_pressed(Button.R1):
+                    robot_actions.ball_fire(runtime)
+
+                if state.was_pressed(Button.CREATE):
+                    if lift_action is not None:
+                        robot_actions.cancel_ball_lift_for_shot(lift_action, runtime)
+                        lift_action = None
+                    robot_actions.game3_ground_pose(runtime)
+                    stage = "完全手動: 地面走行姿勢へ"
+                elif state.was_pressed(Button.CROSS) and lift_action is None:
+                    robot_actions.game3_ground_pose(runtime)
+                    stage = "完全手動: 地面走行姿勢へ"
+                elif state.was_pressed(Button.CIRCLE):
+                    robot_actions.game3_grab(runtime)
+                    stage = "完全手動: 掴む姿勢"
+                elif state.was_pressed(Button.SQUARE):
+                    robot_actions.game3_release(runtime)
+                    stage = "完全手動: 排出姿勢"
+                elif state.was_pressed(Button.TRIANGLE):
+                    lift_action = robot_actions.start_ball_lift_for_shot(runtime)
+                    stage = "完全手動: 持上げ中"
+
+                if lift_action is not None and lift_action.update():
+                    lift_action = None
+                    stage = "完全手動: 持上げ完了"
 
             if mode.auto_enabled and not camera_error:
                 # CREATE: 見えているパネルから、中央→上→下の順に標的を決める。
