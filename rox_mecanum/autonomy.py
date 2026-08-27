@@ -68,6 +68,7 @@ def face_target_command(
     center_tolerance: float = 0.08,
     rotation_gain: float = 0.60,
     maximum_speed: float = 0.20,
+    horizontal_error: float | None = None,
 ) -> MotionCommand:
     """Tagが画面中央へ来るまで、その方向へだけ旋回する。
 
@@ -76,7 +77,7 @@ def face_target_command(
     """
     if center_tolerance < 0.0 or rotation_gain <= 0.0 or maximum_speed <= 0.0:
         raise ValueError("中心許容値・旋回ゲイン・最大速度を確認してください")
-    error = float(target.horizontal_error)
+    error = float(target.horizontal_error if horizontal_error is None else horizontal_error)
     if abs(error) <= center_tolerance:
         return MotionCommand.stop()
     speed = max(-maximum_speed, min(maximum_speed, error * rotation_gain))

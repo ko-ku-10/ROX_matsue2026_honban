@@ -21,6 +21,7 @@ from rox_mecanum import (
     choose_panel_target,
     midpoint,
     open_camera,
+    robot_center_horizontal_error,
 )
 
 
@@ -36,10 +37,6 @@ DISTANCE_TOLERANCE_M = 0.08
 
 LIFT_TIMEOUT_SEC = 8.0
 
-# 発射後に補給場所へ戻る動き。
-RETREAT_SPEED = 0.20
-RETREAT_TIME_SEC = 0.0
-
 # パネルのTag番号。中央段 → 上段 → 下段の順に狙う。
 PANEL_ROWS = {
     "middle": (17, 18, 19),
@@ -47,9 +44,9 @@ PANEL_ROWS = {
     "bottom": (20, 21, 22),
 }
 
-# 各段を撃つとき、Tagまで残す距離[m]。
-# 実射して当たりやすい距離をここへ入れる。
-SHOT_DISTANCE_M = {
+# 段ごとの照準距離[m]。前進を止めて横スライド照準へ切り替える距離。
+# 中段・上段・下段で当たりやすい距離を、それぞれ実射して入力する。
+AIM_DISTANCE_M = {
     "middle": 1.20,
     "top": 1.20,
     "bottom": 1.20,
@@ -58,7 +55,7 @@ SHOT_DISTANCE_M = {
 def main() -> None:
     print("GAME2: タッチパッド=手動/自動")
     print("  手動: CREATE/×=地面姿勢, ○=掴む, □=排出, △=持上げ, R1=発射")
-    print("  自動: CREATE=照準/持上げ中リセット, △=持上げ, L2=発射, ×=後退")
+    print("  自動: CREATE=照準/持上げ中リセット, △=持上げ, L1=発射")
     runtime = None
     camera = None
 
@@ -81,7 +78,6 @@ def main() -> None:
         stage = "補給待ち: CREATEで照準開始"
         target_ids = None
         target_row = None
-        retreat_until = 0.0
         lift_action = None
         shown_stage = None
 
@@ -112,7 +108,6 @@ def main() -> None:
                 stage = "補給待ち: CREATEで照準開始"
                 target_ids = None
                 target_row = None
-                retreat_until = 0.0
                 print(f"モード: {'自動' if mode.auto_enabled else '完全手動'}")
 
             auto = MotionCommand.stop()
@@ -155,7 +150,7 @@ def main() -> None:
                     choice = choose_panel_target(tags, PANEL_ROWS, camera_hensuu.tag_max_age_sec)
                     if choice is None:
                         stage = "自動停止: Tag14〜22が見えない"
-                    elif choice.row not in SHOT_DISTANCE_M:
+                    elif choice.row not in AIM_DISTANCE_M:
                         stage = "自動停止: 段の発射距離が未設定"
                     else:
                         target_ids = choice.tag_ids
@@ -173,13 +168,18 @@ def main() -> None:
                     first = tags.get(target_ids[0], camera_hensuu.tag_max_age_sec) if target_ids else None
                     last = tags.get(target_ids[-1], camera_hensuu.tag_max_age_sec) if target_ids else None
                     target = first if target_ids and len(target_ids) == 1 else midpoint(first, last) if first and last else None
-                    distance = SHOT_DISTANCE_M.get(target_row)
+                    distance = AIM_DISTANCE_M.get(target_row)
                     if target is None or target.distance_m is None or distance is None:
                         stage = "自動停止: 標的Tagまたは距離が読めない"
                     else:
+                        horizontal_error = robot_center_horizontal_error(
+                            target,
+                            camera_lateral_offset_m=camera_hensuu.camera_lateral_offset_m,
+                            focal_length_px=camera_hensuu.camera_focal_length_px,
+                        )
                         auto = MotionCommand(
                             forward=max(-AUTO_SPEED, min(AUTO_SPEED, (target.distance_m - distance) * CENTER_GAIN)),
-                            strafe=target.horizontal_error * CENTER_GAIN,
+                            strafe=horizontal_error * CENTER_GAIN,
                         )
                         if abs(target.distance_m - distance) <= DISTANCE_TOLERANCE_M:
                             stage = "横スライド照準中"
@@ -192,8 +192,13 @@ def main() -> None:
                     if target is None:
                         stage = "自動停止: 標的Tagが見えない"
                     else:
-                        auto = MotionCommand(strafe=target.horizontal_error * CENTER_GAIN)
-                        if abs(target.horizontal_error) <= CENTER_TOLERANCE:
+                        horizontal_error = robot_center_horizontal_error(
+                            target,
+                            camera_lateral_offset_m=camera_hensuu.camera_lateral_offset_m,
+                            focal_length_px=camera_hensuu.camera_focal_length_px,
+                        )
+                        auto = MotionCommand(strafe=horizontal_error * CENTER_GAIN)
+                        if abs(horizontal_error) <= CENTER_TOLERANCE:
                             stage = "照準完了: △で持上げ"
 
                 # △: GAME3と共通の持上げ動作。
@@ -212,37 +217,16 @@ def main() -> None:
                         stage = "リセット中: 地面ドリブル姿勢へ"
                     elif lift_action is not None and lift_action.update():
                         lift_action = None
-                        stage = "発射準備完了: L2で発射"
+                        stage = "発射準備完了: L1で発射"
 
                 elif stage == "リセット中: 地面ドリブル姿勢へ":
                     if runtime.servos.catch.is_at_target() and runtime.servos.lift.is_at_target():
                         stage = "補給待ち: CREATEで照準開始"
 
-                # L2: GAME3と共通の発射動作を実行する。
-                elif stage == "発射準備完了: L2で発射" and state.was_pressed(Button.L2):
+                # L1: GAME3と共通の発射動作を実行する。
+                elif stage == "発射準備完了: L1で発射" and state.was_pressed(Button.L1):
                     robot_actions.ball_fire(runtime)
-                    stage = "発射済み: ×で後退"
-
-                # ×: liftを下ろし、地面走行姿勢へ戻す。
-                elif stage == "発射済み: ×で後退" and state.was_pressed(Button.CROSS):
-                    robot_actions.game2_ground_pose(runtime)
-                    stage = "liftを下げ中"
-
-                elif stage == "liftを下げ中":
-                    if runtime.servos.catch.is_at_target() and runtime.servos.lift.is_at_target():
-                        if RETREAT_TIME_SEC <= 0.0:
-                            stage = "自動停止: 後退時間が0秒"
-                        else:
-                            retreat_until = loop_started + RETREAT_TIME_SEC
-                            stage = "補給地点へ後退中"
-
-                elif stage == "補給地点へ後退中":
-                    if loop_started >= retreat_until:
-                        stage = "補給待ち: CREATEで照準開始"
-                        target_ids = None
-                        target_row = None
-                    else:
-                        auto = MotionCommand.backward(RETREAT_SPEED)
+                    stage = "発射完了: 手動で続行"
 
             # 自動速度へ手動スティックを足す。完全手動なら手動だけになる。
             command = add_manual_command(auto, runtime.manual_command(state), mode.auto_enabled)

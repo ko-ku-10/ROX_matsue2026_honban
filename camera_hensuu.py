@@ -19,3 +19,9 @@ mipi_height = 1080
 apriltag_size_m = 0.180
 camera_focal_length_px = 729.30
 tag_max_age_sec = 0.35
+
+# カメラ中心がロボット中心から横にずれている量[m]。
+# 右へ付いているなら正、左へ付いているなら負。最初は 0.0 のままにし、
+# 実測した取付け位置（例: 右へ5cmなら +0.05）を入力する。
+# Tagの距離に応じて画像上の中心位置を補正し、ロボット中心がTagへ向くようにする。
+camera_lateral_offset_m = 0.0

@@ -21,6 +21,7 @@ from rox_mecanum import (
     add_manual_command,
     face_target_command,
     open_camera,
+    robot_center_horizontal_error,
 )
 
 
@@ -129,11 +130,17 @@ def main() -> None:
                     elif tag8 is None:
                         stage = "自動停止: Tag8を見失った"
                     else:
+                        horizontal_error = robot_center_horizontal_error(
+                            tag8,
+                            camera_lateral_offset_m=camera_hensuu.camera_lateral_offset_m,
+                            focal_length_px=camera_hensuu.camera_focal_length_px,
+                        )
                         auto = face_target_command(
                             tag8,
                             center_tolerance=TAG_CENTER_TOLERANCE,
                             rotation_gain=TAG_ROTATE_GAIN,
                             maximum_speed=TAG_ROTATE_MAX_SPEED,
+                            horizontal_error=horizontal_error,
                         )
                         if auto == MotionCommand.stop():
                             forward_until = loop_started + TAG8_FORWARD_SEC

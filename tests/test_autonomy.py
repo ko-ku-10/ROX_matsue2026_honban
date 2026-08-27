@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from rox_mecanum import Button, ControlMode, ControllerState, ModeController, MotionCommand, TagObservation, TagStore, add_manual_command, face_target_command, midpoint
+from rox_mecanum import Button, ControlMode, ControllerState, ModeController, MotionCommand, TagObservation, TagStore, add_manual_command, face_target_command, midpoint, robot_center_horizontal_error
 
 
 def test_touchpad_switches_mode_only_on_press() -> None:
@@ -45,3 +45,10 @@ def test_face_target_rotates_only_when_tag_is_off_center() -> None:
     assert command.forward == 0.0
     assert command.strafe == 0.0
     assert command.rotate > 0.0
+
+
+def test_camera_lateral_offset_corrects_for_robot_center() -> None:
+    # カメラが右へ20cm、Tagまで2m、焦点距離500pxの場合、ロボット正面のTagは
+    # 画像中心より50px（正規化で-0.1）左に見える。補正後は0になる。
+    target = TagObservation(8, 450, 200, 1000, 2.0, 1.0)
+    assert robot_center_horizontal_error(target, camera_lateral_offset_m=0.2, focal_length_px=500.0) == 0.0

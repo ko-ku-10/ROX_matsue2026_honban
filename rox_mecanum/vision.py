@@ -31,6 +31,32 @@ class TagObservation:
         return (self.center_x - self.image_width / 2.0) / (self.image_width / 2.0)
 
 
+def robot_center_horizontal_error(
+    target: TagObservation,
+    *,
+    camera_lateral_offset_m: float = 0.0,
+    focal_length_px: float = 0.0,
+) -> float:
+    """カメラの横取付けずれを補正した、ロボット中心基準の左右ずれを返す。
+
+    ``camera_lateral_offset_m`` はロボット中心から見て、右が正・左が負。
+    カメラが右へ付いている場合、ロボット正面のTagは画像では少し左に見える。
+    その自然なずれを距離に応じて差し引く。距離または焦点距離が不明な時は、
+    安全に従来どおり画像中心基準の値を返す。
+    """
+    error = target.horizontal_error
+    if (
+        target.distance_m is None
+        or target.distance_m <= 0.0
+        or focal_length_px <= 0.0
+        or target.image_width <= 0
+    ):
+        return error
+    half_width = target.image_width / 2.0
+    camera_offset_error = (float(camera_lateral_offset_m) * float(focal_length_px)) / (target.distance_m * half_width)
+    return error + camera_offset_error
+
+
 class TagStore:
     """古い検出を現在位置として使わないTag保管庫。"""
 
