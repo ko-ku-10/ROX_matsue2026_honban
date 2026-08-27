@@ -25,18 +25,24 @@ READ_SEC = 1.0
 
 
 def watch_mech_pos(reader: ATEncoderReader, seconds: float, title: str) -> tuple[float | None, float | None]:
-    """指定時間liftのmechPosを読み、最初と最後の値を返す。"""
+    """angle_monitor.pyと同じ交互要求でliftのmechPosを読む。"""
     print(f"\n--- {title} ({seconds:.1f}秒) ---")
     first: float | None = None
     last: float | None = None
     deadline = time.monotonic() + seconds
 
     while time.monotonic() < deadline:
-        # angle_monitor.py と同じ: 要求して15ms待ってから受信する。
-        reader.request("lift")
+        # angle_monitor.py と完全に同じ: catch/liftを交互に要求して15ms待つ。
+        # catchは動かさず、読取り要求を送るだけである。
+        reader.request_next()
         time.sleep(0.015)
         for feedback in reader.poll():
-            if feedback.name != "lift" or feedback.position_rad is None:
+            if feedback.position_rad is None:
+                continue
+            if feedback.name == "catch":
+                print(f"catch mechPos={feedback.position_rad:+.5f} rad")
+                continue
+            if feedback.name != "lift":
                 continue
             first = feedback.position_rad if first is None else first
             last = feedback.position_rad
@@ -58,7 +64,13 @@ def main() -> None:
         minimum_interval=0.0008,
     )
     lift_address = at_address_from_can_id(hensuu.lift_can_id)
-    reader = ATEncoderReader(transport, {"lift": lift_address})
+    reader = ATEncoderReader(
+        transport,
+        {
+            "catch": at_address_from_can_id(hensuu.catch_can_id),
+            "lift": lift_address,
+        },
+    )
     # PID用の停止帯を使わず、ここで指定した5%をそのまま送る。
     lift = ATMotor(transport, lift_address, zero_hold_band=0.0)
 
