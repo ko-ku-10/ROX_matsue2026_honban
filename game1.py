@@ -75,12 +75,6 @@ def main() -> None:
             loop_started = time.monotonic()
             state = runtime.controller.read()
 
-            try:
-                tags.update(detector.detect(camera.read()))
-                camera_error = ""
-            except Exception as error:
-                camera_error = str(error)
-
             if state.was_pressed(Button.OPTIONS):
                 print("OPTIONS: 非常停止")
                 robot_actions.all_off()
@@ -95,6 +89,17 @@ def main() -> None:
 
             auto = MotionCommand.stop()
 
+            # 手動走行中はカメラを一切読まない。重いAprilTag検出による
+            # スティック操作のラグを防ぐ。↑を押した時と中心合わせ中だけ読む。
+            start_gate = mode.auto_enabled and state.was_pressed(Button.DPAD_UP)
+            needs_tag_frame = start_gate or stage == "Tag8を画面中央へ合わせ中"
+            camera_error = ""
+            if needs_tag_frame:
+                try:
+                    tags.update(detector.detect(camera.read()))
+                except Exception as error:
+                    camera_error = str(error)
+
             # GAME1の完全手動ではcatchだけを操作できる。
             # liftにはここから一切命令を出さない。
             if not mode.auto_enabled:
@@ -106,7 +111,7 @@ def main() -> None:
                     stage = "手動: catchを開く姿勢へ"
 
             # ↑は操縦者の「ゲートを通る」承認ボタン。
-            if mode.auto_enabled and state.was_pressed(Button.DPAD_UP):
+            if start_gate:
                 if camera_error:
                     stage = "自動停止: カメラエラー"
                 elif tags.get(TAG_GATE, camera_hensuu.tag_max_age_sec) is None:
@@ -118,7 +123,9 @@ def main() -> None:
             if mode.auto_enabled:
                 if stage == "Tag8を画面中央へ合わせ中":
                     tag8 = tags.get(TAG_GATE, camera_hensuu.tag_max_age_sec)
-                    if tag8 is None:
+                    if camera_error:
+                        stage = "自動停止: カメラエラー"
+                    elif tag8 is None:
                         stage = "自動停止: Tag8を見失った"
                     else:
                         auto = face_target_command(
