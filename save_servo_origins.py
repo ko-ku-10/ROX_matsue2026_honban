@@ -13,8 +13,8 @@ input("準備できたら Enter: ")
 
 servos = open_servos()
 try:
-    # 有効化直後に必ず停止を送る。ここでは機構を動かさない。
-    servos.attach()
+    # 原点登録はmechPosを読むだけなので、enable/stopのCANフレームを送らない。
+    # これにより、角度監視では読めるのにattach()直後だけ応答が消える状態を避ける。
     servos.save_origins(hensuu.servo_origin_file)
     print(f"原点を保存しました: {hensuu.servo_origin_file}")
     print("次回から GAME1 / GAME2 / GAME3 はストッパー原点合わせをせずに起動します。")
