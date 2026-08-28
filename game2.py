@@ -44,10 +44,6 @@ TAG_CENTER_TOLERANCE = camera_hensuu.tag_center_tolerance
 TAG_CENTER_STABLE_SEC = camera_hensuu.tag_center_stable_sec
 TAG_ROTATE_GAIN = camera_hensuu.tag_rotate_gain
 TAG_ROTATE_MAX_SPEED = camera_hensuu.tag_rotate_max_speed
-TAG_YAW_TRUST_CENTER_ERROR = camera_hensuu.tag_yaw_trust_center_error
-TAG_YAW_TOLERANCE_DEG = camera_hensuu.tag_yaw_tolerance_deg
-TAG_YAW_GAIN = camera_hensuu.tag_yaw_gain
-TAG_YAW_DIRECTION = camera_hensuu.tag_yaw_direction
 
 # ↑を押してからTag14〜22を見つけるまでの前進設定。
 # 見つからないまま走り続けないよう、最大時間を必ず決めておく。
@@ -216,7 +212,9 @@ def main() -> None:
                     else:
                         auto = MotionCommand(forward=TAG_SEARCH_SPEED)
 
-                # 画面中央でのみTag面の角度を信用して、ロボットを正面へ向ける。
+                # Tagを画面中央へ寄せて、ロボットの向きを合わせる。
+                # 単眼・魚眼補正なしのTag面yawは値が揺れやすいため、GAME2では
+                # 「中央に安定して見えていること」を正面判定に使う。
                 # 画面端のTagは探索に使えても、ここでは角度補正に使わない。
                 elif target_row is not None and stage == f"{target_row}段: 正面へ向き合わせ中":
                     first = tags.get(target_ids[0], camera_hensuu.tag_max_age_sec) if target_ids else None
@@ -238,22 +236,6 @@ def main() -> None:
                                 rotation_gain=TAG_ROTATE_GAIN,
                                 maximum_speed=TAG_ROTATE_MAX_SPEED,
                                 horizontal_error=horizontal_error,
-                            )
-                        elif (
-                            abs(horizontal_error) > TAG_YAW_TRUST_CENTER_ERROR
-                            or target.yaw_degrees is None
-                        ):
-                            stage = "自動停止: 中央でTag角度を読めない"
-                        elif abs(target.yaw_degrees) > TAG_YAW_TOLERANCE_DEG:
-                            yaw_aligned_since = None
-                            auto = MotionCommand(
-                                rotate=max(
-                                    -TAG_ROTATE_MAX_SPEED,
-                                    min(
-                                        TAG_ROTATE_MAX_SPEED,
-                                        target.yaw_degrees * TAG_YAW_GAIN * TAG_YAW_DIRECTION,
-                                    ),
-                                ),
                             )
                         elif yaw_aligned_since is None:
                             yaw_aligned_since = loop_started
@@ -277,8 +259,6 @@ def main() -> None:
                         )
                         if (
                             abs(horizontal_error) > TAG_CENTER_TOLERANCE
-                            or target.yaw_degrees is None
-                            or abs(target.yaw_degrees) > TAG_YAW_TOLERANCE_DEG
                         ):
                             yaw_aligned_since = None
                             stage = f"{target_row}段: 正面へ向き合わせ中"
