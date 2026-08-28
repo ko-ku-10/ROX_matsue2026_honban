@@ -298,6 +298,9 @@ def main() -> None:
                         # カメラで見た角度に、カメラ取付け角の補正を足して
                         # ロボット本体がTagへ真正面を向くための角度にする。
                         robot_yaw_error = target.yaw_degrees + camera_hensuu.camera_yaw_offset_deg
+                        # 浮動小数やカメラの微小な揺れで永久に回り続けないよう、
+                        # サイトと同じ0.1°表示で0.0°になったかを判定する。
+                        angle_is_zero = abs(round(robot_yaw_error, 1)) <= TAG_YAW_TOLERANCE_DEG
                         auto_debug.update({
                             "Tag 18 x[m]": round(position_x, 3),
                             "Tag 18 z[m]": round(target.forward_m, 3),
@@ -310,7 +313,7 @@ def main() -> None:
                             "ロボット角度誤差[°]": round(robot_yaw_error, 2),
                             "x到達": abs(position_x) <= AUTO_LATERAL_TOLERANCE_M,
                             "z到達": abs(distance_error) <= DISTANCE_TOLERANCE_M,
-                            "角度到達": abs(robot_yaw_error) <= TAG_YAW_TOLERANCE_DEG,
+                            "角度到達": angle_is_zero,
                         })
                         if loop_started - last_position_report_at >= 0.5:
                             print(
@@ -321,7 +324,7 @@ def main() -> None:
                             )
                             last_position_report_at = loop_started
                         if (
-                            abs(robot_yaw_error) <= TAG_YAW_TOLERANCE_DEG
+                            angle_is_zero
                             and abs(position_x) <= AUTO_LATERAL_TOLERANCE_M
                             and abs(distance_error) <= DISTANCE_TOLERANCE_M
                         ):
@@ -329,7 +332,7 @@ def main() -> None:
                             auto_debug["判断"] = "角度・x・zがすべて許容範囲内。照準完了"
                         else:
                             # 最初にTag面の角度だけを0°へ合わせる。
-                            if abs(robot_yaw_error) > TAG_YAW_TOLERANCE_DEG:
+                            if not angle_is_zero:
                                 distance_checked_at = None
                                 distance_error_at_check = None
                                 rotate = max(

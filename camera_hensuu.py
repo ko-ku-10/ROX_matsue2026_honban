@@ -43,8 +43,8 @@ tag_yaw_trust_center_error = 0.12
 tag_rotate_gain = 0.60
 tag_rotate_max_speed = 0.20
 tag_center_stable_sec = 0.30
-# Tag面がロボット正面と平行とみなす角度。
-tag_yaw_tolerance_deg = 1.0
+# Tag面がロボット正面と平行とみなす角度。0.0ならサイト表示が0.0°の時だけ到達。
+tag_yaw_tolerance_deg = 0.0
 tag_yaw_gain = 0.020
 # 実機で角度合わせだけが逆回転なら -1.0 に変える。
 tag_yaw_direction = 1.0
