@@ -38,6 +38,9 @@ AUTO_SPEED = 0.20
 CENTER_GAIN = 0.45
 CENTER_TOLERANCE = 0.08
 DISTANCE_TOLERANCE_M = 0.08
+# Tagが遠い時にロボットが後ろへ進む場合だけ、-1.0へ変える。
+# 自動走行だけの設定。手動スティックの前後設定とは別である。
+AUTO_FORWARD_DIRECTION = 1.0
 
 # Tagの中央・角度合わせはGAME1と同じ共通設定を使う。
 TAG_CENTER_TOLERANCE = camera_hensuu.tag_center_tolerance
@@ -292,7 +295,15 @@ def main() -> None:
                             stage = f"{target_row}段: 正面へ向き合わせ中"
                         else:
                             auto = MotionCommand(
-                                forward=max(-AUTO_SPEED, min(AUTO_SPEED, (target.distance_m - distance) * CENTER_GAIN)),
+                                forward=max(
+                                    -AUTO_SPEED,
+                                    min(
+                                        AUTO_SPEED,
+                                        (target.distance_m - distance)
+                                        * CENTER_GAIN
+                                        * AUTO_FORWARD_DIRECTION,
+                                    ),
+                                ),
                             )
                             if loop_started - last_auto_report_at >= 0.5:
                                 print(
