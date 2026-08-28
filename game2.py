@@ -144,6 +144,25 @@ def main() -> None:
                 yaw_aligned_since = None
                 print(f"モード: {'自動' if mode.auto_enabled else '完全手動'}")
 
+            # ボールは手動で装填済み。↑を押したら、機構の到達待ちをせず
+            # 直ちにTag14〜22を探しながら前進する。
+            # タッチパッドを先に押していなくても、↑は明示的な自動開始として扱う。
+            if (
+                lift_action is None
+                and state.was_pressed(Button.DPAD_UP)
+                and (
+                    stage == "補給後待ち: ↑で照準開始"
+                    or stage.startswith("自動停止:")
+                )
+            ):
+                if mode.enable_auto():
+                    print("↑: 自動モードへ切替えて照準を開始します")
+                target_ids = None
+                target_row = None
+                yaw_aligned_since = None
+                tag_search_started_at = time.monotonic()
+                stage = "Tag14〜22を探索しながら前進中"
+
             auto = MotionCommand.stop()
 
             if camera_error:
@@ -179,20 +198,8 @@ def main() -> None:
                     stage = "完全手動: 持上げ完了"
 
             if mode.auto_enabled and not camera_error:
-                # ↑: ボール装填後に照準を開始する。
-                # この時点ではTagが見えていなくても、低速前進しながら探索する。
-                if stage == "補給後待ち: ↑で照準開始" and state.was_pressed(Button.DPAD_UP):
-                    robot_actions.game2_ground_pose(runtime)
-                    tag_search_started_at = time.monotonic()
-                    stage = "地面走行姿勢へ移動中"
-
-                # ボールを地面に付ける姿勢に着くまで、自動走行しない。
-                elif stage == "地面走行姿勢へ移動中":
-                    if runtime.servos.catch.is_at_target() and runtime.servos.lift.is_at_target():
-                        stage = "Tag14〜22を探索しながら前進中"
-
                 # Tagが見えるまで前進する。段は上→中央→下の順で選ぶ。
-                elif stage == "Tag14〜22を探索しながら前進中":
+                if stage == "Tag14〜22を探索しながら前進中":
                     choice = choose_panel_target(
                         tags,
                         PANEL_ROWS,

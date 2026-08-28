@@ -41,6 +41,14 @@ class ModeController:
         self.changed_at = monotonic()
         return True
 
+    def enable_auto(self) -> bool:
+        """↑などの明示的な自動開始ボタン用に、自動モードへ切り替える。"""
+        if self.mode is ControlMode.AUTO:
+            return False
+        self.mode = ControlMode.AUTO
+        self.changed_at = monotonic()
+        return True
+
     @property
     def auto_enabled(self) -> bool:
         return self.mode is ControlMode.AUTO
