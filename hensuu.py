@@ -101,6 +101,9 @@ servo_max_speed_percent = 8.0
 mechanism_move_speed_percent = 10.0
 servo_tolerance_deg = 0.2
 encoder_poll_hz = 100.0
+# mechPos要求を送ってから受信するまでの待機時間。angle_monitor.pyと同じ15ms。
+# 短くすると応答を取りこぼしやすく、長くするとPIDの更新回数が減る。
+encoder_response_wait_sec = 0.015
 # この時間mechPos応答が来なければ保持出力を停止する（角度の推定はしない）。
 servo_feedback_timeout_sec = 0.25
 

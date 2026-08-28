@@ -185,14 +185,24 @@ class ServoMotors:
     def update(self) -> None:
         """エンコーダーを要求・受信し、両方のPID保持を1回更新する。50Hzで呼ぶ。"""
         with self._lock:
+            def apply_feedbacks(now: float) -> None:
+                """到着済みの正式mechPosを該当サーボへ渡す。"""
+                for feedback in self.reader.poll(now):
+                    if feedback.name == "catch":
+                        self.catch.update_feedback(feedback)
+                    elif feedback.name == "lift":
+                        self.lift.update_feedback(feedback)
+
             now = time.monotonic()
-            # まず前周期に送った要求の応答を処理し、その後に次の1台を要求する。
-            for feedback in self.reader.poll(now):
-                if feedback.name == "catch":
-                    self.catch.update_feedback(feedback)
-                elif feedback.name == "lift":
-                    self.lift.update_feedback(feedback)
+            # 前周期までに到着した応答を先に処理する。
+            apply_feedbacks(now)
+            # angle_monitor.pyで実機確認済みの手順と同じく、1台へ要求してから
+            # 少し待ち、その応答をこの周期内で読む。以前は要求直後に次周期へ
+            # 進んでおり、USB-AT変換器が応答を落とすとcatchが安全停止していた。
             self.reader.request_next()
+            time.sleep(hensuu.encoder_response_wait_sec)
+            now = time.monotonic()
+            apply_feedbacks(now)
             # 応答が消えた時、古い速度を出し続けないための安全停止。
             if self.catch.watchdog(now):
                 print(
