@@ -32,17 +32,22 @@ from rox_mecanum import (
 
 # Tag位置（カメラ座標の右x・前z）を使う照準の速さ・許容範囲。
 # まず画像中心へ旋回してから位置を使うため、魚眼の端の値で横移動しない。
-AUTO_STRAFE_MAX_SPEED = 0.20
+AUTO_STRAFE_MAX_SPEED = 1.00
 # P制御だけだと中心付近で1〜2%になり、実機では静止摩擦に負けて動かない。
 # 動き出せる最低速度。横移動が強すぎる時は少し下げる。
 AUTO_STRAFE_MIN_SPEED = 0.08
-AUTO_FORWARD_MAX_SPEED = 0.20
+AUTO_FORWARD_MAX_SPEED = 1.00
 CENTER_GAIN = 0.45
 CENTER_TOLERANCE = 0.08
 AUTO_LATERAL_TOLERANCE_M = 0.06
 # zidou/mecanum.py と同じ、Tag位置 x からの旋回制御。
 AUTO_POSITION_ROTATE_GAIN = 0.60
 AUTO_POSITION_ROTATE_MAX_SPEED = 0.20
+# 自動制御の反応。1.0なら誤差1mでコントローラー全倒し相当になる。
+AUTO_FORWARD_GAIN = 1.00
+AUTO_STRAFE_GAIN = 1.00
+AUTO_ROTATE_GAIN = 0.10
+AUTO_ROTATE_MAX_SPEED = 1.00
 # カメラ角度は1フレームごとに少し揺れるので、過去値と混ぜて滑らかにする。
 AUTO_YAW_FILTER_ALPHA = 0.25
 # 旋回を始める時の最低速度。小さすぎる指令で「ちょこっ」と止まるのを防ぐ。
@@ -352,10 +357,10 @@ def main() -> None:
                                 distance_checked_at = None
                                 distance_error_at_check = None
                                 rotate = max(
-                                    -TAG_ROTATE_MAX_SPEED,
+                                    -AUTO_ROTATE_MAX_SPEED,
                                     min(
-                                        TAG_ROTATE_MAX_SPEED,
-                                        robot_yaw_error * TAG_YAW_GAIN * TAG_YAW_DIRECTION,
+                                        AUTO_ROTATE_MAX_SPEED,
+                                        robot_yaw_error * AUTO_ROTATE_GAIN * TAG_YAW_DIRECTION,
                                     ),
                                 )
                                 if abs(rotate) < AUTO_ROTATE_MIN_SPEED:
@@ -374,7 +379,7 @@ def main() -> None:
                                 distance_error_at_check = None
                                 strafe = max(
                                     -AUTO_STRAFE_MAX_SPEED,
-                                    min(AUTO_STRAFE_MAX_SPEED, position_x * CENTER_GAIN),
+                                    min(AUTO_STRAFE_MAX_SPEED, position_x * AUTO_STRAFE_GAIN),
                                 )
                                 if abs(strafe) < AUTO_STRAFE_MIN_SPEED:
                                     strafe = AUTO_STRAFE_MIN_SPEED if strafe >= 0.0 else -AUTO_STRAFE_MIN_SPEED
@@ -406,7 +411,7 @@ def main() -> None:
                                         -AUTO_FORWARD_MAX_SPEED,
                                         min(
                                             AUTO_FORWARD_MAX_SPEED,
-                                        distance_error * CENTER_GAIN * AUTO_FORWARD_DIRECTION,
+                                            distance_error * AUTO_FORWARD_GAIN * AUTO_FORWARD_DIRECTION,
                                     ),
                                     )
                                     auto = MotionCommand(forward=forward)
