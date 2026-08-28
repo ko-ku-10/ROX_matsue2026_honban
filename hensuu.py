@@ -86,7 +86,7 @@ lift_test_up_angle = -10.0
 catch_counts_per_degree = 65536.0 / 360.0
 lift_counts_per_degree = 65536.0 / 360.0
 # 保持の反応。停止範囲を小さくしたため、弱すぎるP値では戻りが遅くなる。
-catch_pid_kp = 0.020
+catch_pid_kp = 0.010
 lift_pid_kp = 0.003
 # 重力などで同じ方向へずれ続ける場合に、少しずつ保持力を増やす。
 catch_pid_ki = 0.002
