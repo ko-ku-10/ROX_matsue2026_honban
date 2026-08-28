@@ -22,9 +22,7 @@ from rox_mecanum import (
     VisionWorker,
     add_manual_command,
     choose_panel_target,
-    midpoint,
     open_camera,
-    robot_center_horizontal_error,
 )
 
 
@@ -42,6 +40,9 @@ AUTO_FORWARD_MAX_SPEED = 0.20
 CENTER_GAIN = 0.45
 CENTER_TOLERANCE = 0.08
 AUTO_LATERAL_TOLERANCE_M = 0.06
+# zidou/mecanum.py と同じ、Tag位置 x からの旋回制御。
+AUTO_POSITION_ROTATE_GAIN = 0.60
+AUTO_POSITION_ROTATE_MAX_SPEED = 0.20
 # 設定距離へ近づく時の許容誤差[m]。
 DISTANCE_TOLERANCE_M = 0.08
 # 自動で前後へ動く向き。前後が逆なら -1.0 に変える。
@@ -92,7 +93,7 @@ AIM_DISTANCE_M = {
 def main() -> None:
     print("GAME2: タッチパッド=手動/自動")
     print("  手動: CREATE/×=地面姿勢, ○=掴む, □=排出, △=持上げ, R1=発射")
-    print("  自動: ↑=中心へ旋回→垂直→正面位置→設定距離へ照準, △=持上げ, L1=ソレノイド発射")
+    print("  自動: ↑=Tag18の位置(x/z)へ照準, △=持上げ, L1=ソレノイド発射")
     runtime = None
     camera = None
     status_site = None
@@ -130,6 +131,7 @@ def main() -> None:
         target_missing_since = None
         distance_error_at_check = None
         distance_checked_at = None
+        last_position_report_at = 0.0
         shown_stage = None
 
         while True:
@@ -245,172 +247,79 @@ def main() -> None:
                         target_row = choice.row if choice is not None else None
 
                     if target_ids is not None and target_row in AIM_DISTANCE_M:
-                        yaw_aligned_since = None
                         target_missing_since = None
+                        distance_error_at_check = None
+                        distance_checked_at = None
                         print(
-                            f"Tag {target_ids[0]}を選択: 中心へ旋回→垂直→正面位置→"
+                            f"Tag {target_ids[0]}を選択: 位置x=0m・"
                             f"{AIM_DISTANCE_M[target_row]:.2f}mまで近づきます"
                         )
-                        stage = f"{target_row}段: Tagを画面中央へ旋回中"
+                        stage = f"{target_row}段: Tag位置(x/z)へ照準中"
                     elif tag_search_started_at is None or time.monotonic() - tag_search_started_at >= TAG_SEARCH_TIMEOUT_SEC:
                         stage = "自動停止: Tag14〜22を見つけられない"
 
-                # 画面端のTag位置は魚眼で大きく歪む。まず旋回だけで画面中央へ寄せる。
-                # この段階では前後・横移動を一切しない。
-                elif target_row is not None and stage == f"{target_row}段: Tagを画面中央へ旋回中":
-                    first = tags.get(target_ids[0], AUTO_TAG_MAX_AGE_SEC) if target_ids else None
-                    last = tags.get(target_ids[-1], AUTO_TAG_MAX_AGE_SEC) if target_ids else None
-                    # 2枚見えている間は中間を狙う。片方が一瞬欠けても、残った
-                    # 1枚で向き・距離合わせを継続して無意味な停止を避ける。
-                    target = first if target_ids and len(target_ids) == 1 else midpoint(first, last) if first and last else first or last
-                    if target is None:
-                        if target_missing_since is None:
-                            target_missing_since = loop_started
-                        vision_worker.request_tag_read()
-                        if loop_started - target_missing_since >= TAG_REACQUIRE_TIMEOUT_SEC:
-                            stage = "自動停止: 標的Tagを1秒間再取得できない"
-                    else:
-                        target_missing_since = None
-                        if abs(target.horizontal_error) > TAG_CENTER_TOLERANCE:
-                            auto = MotionCommand(
-                                rotate=max(
-                                    -TAG_ROTATE_MAX_SPEED,
-                                    min(TAG_ROTATE_MAX_SPEED, target.horizontal_error * CENTER_GAIN),
-                                ),
-                            )
-                        else:
-                            yaw_aligned_since = None
-                            stage = f"{target_row}段: Tag面に垂直へ旋回中"
-
-                # Tag面がロボット正面に対して垂直になるまで旋回する。
-                elif target_row is not None and stage == f"{target_row}段: Tag面に垂直へ旋回中":
-                    first = tags.get(target_ids[0], AUTO_TAG_MAX_AGE_SEC) if target_ids else None
-                    last = tags.get(target_ids[-1], AUTO_TAG_MAX_AGE_SEC) if target_ids else None
-                    target = first if target_ids and len(target_ids) == 1 else midpoint(first, last) if first and last else first or last
-                    if target is None:
-                        if target_missing_since is None:
-                            target_missing_since = loop_started
-                        vision_worker.request_tag_read()
-                        if loop_started - target_missing_since >= TAG_REACQUIRE_TIMEOUT_SEC:
-                            stage = "自動停止: 標的Tagを1秒間再取得できない"
-                    elif target.yaw_degrees is None:
-                        target_missing_since = None
-                        stage = "自動停止: Tag面の角度が読めない。1m補正を確認"
-                    else:
-                        target_missing_since = None
-                        horizontal_error = robot_center_horizontal_error(
-                            target,
-                            camera_lateral_offset_m=camera_hensuu.camera_lateral_offset_m,
-                            focal_length_px=camera_hensuu.camera_focal_length_px,
-                        )
-                        if abs(horizontal_error) > TAG_CENTER_TOLERANCE:
-                            yaw_aligned_since = None
-                            stage = f"{target_row}段: Tagを画面中央へ旋回中"
-                        elif abs(target.yaw_degrees) > TAG_YAW_TOLERANCE_DEG:
-                            yaw_aligned_since = None
-                            auto = MotionCommand(
-                                rotate=max(
-                                    -TAG_ROTATE_MAX_SPEED,
-                                    min(
-                                        TAG_ROTATE_MAX_SPEED,
-                                        target.yaw_degrees * TAG_YAW_GAIN * TAG_YAW_DIRECTION,
-                                    ),
-                                ),
-                            )
-                        elif yaw_aligned_since is None:
-                            yaw_aligned_since = loop_started
-                        elif loop_started - yaw_aligned_since >= TAG_CENTER_STABLE_SEC:
-                            distance_error_at_check = None
-                            distance_checked_at = None
-                            stage = f"{target_row}段: 正面位置へ横移動中"
-
-                # Tagの正面近くまで旋回できてから、カメラ座標の右xを使って横移動する。
-                # x=0がカメラ正面。カメラの取付けずれを足すとロボット中心基準になる。
-                elif target_row is not None and stage == f"{target_row}段: 正面位置へ横移動中":
+                # zidou/mecanum.py と同じ位置制御。
+                # x はTagのカメラ座標の左右[m]、z は正面距離[m]。
+                # xが0へ近づくよう旋回し、zが設定距離へ近づくよう前後へ動く。
+                elif target_row is not None and stage == f"{target_row}段: Tag位置(x/z)へ照準中":
                     target = tags.get(target_ids[0], AUTO_TAG_MAX_AGE_SEC) if target_ids else None
                     if target is None:
-                        vision_worker.request_tag_read()
-                        stage = "自動停止: Tag 18を再取得できない"
-                    elif target.lateral_m is None:
-                        stage = "自動停止: Tagの位置xを読めない。カメラ設定を確認"
-                    else:
-                        lateral_error = target.lateral_m + camera_hensuu.camera_lateral_offset_m
-                        if abs(lateral_error) <= AUTO_LATERAL_TOLERANCE_M:
-                            distance_error_at_check = None
-                            distance_checked_at = None
-                            stage = f"{target_row}段: 設定距離へ前後移動中"
-                        else:
-                            strafe_speed = max(
-                                -AUTO_STRAFE_MAX_SPEED,
-                                min(AUTO_STRAFE_MAX_SPEED, lateral_error * CENTER_GAIN),
-                            )
-                            if abs(strafe_speed) < AUTO_STRAFE_MIN_SPEED:
-                                strafe_speed = AUTO_STRAFE_MIN_SPEED if strafe_speed >= 0.0 else -AUTO_STRAFE_MIN_SPEED
-                            auto = MotionCommand(strafe=strafe_speed)
-
-                # 正面かつ垂直の状態だけで、段ごとの設定距離まで前後移動する。
-                # 中心・角度がずれたら、必ず横中心合わせ／旋回へ戻してから再開する。
-                elif target_row is not None and stage == f"{target_row}段: 設定距離へ前後移動中":
-                    first = tags.get(target_ids[0], AUTO_TAG_MAX_AGE_SEC) if target_ids else None
-                    last = tags.get(target_ids[-1], AUTO_TAG_MAX_AGE_SEC) if target_ids else None
-                    target = first if target_ids and len(target_ids) == 1 else midpoint(first, last) if first and last else first or last
-                    if target is None:
                         if target_missing_since is None:
                             target_missing_since = loop_started
                         vision_worker.request_tag_read()
                         if loop_started - target_missing_since >= TAG_REACQUIRE_TIMEOUT_SEC:
-                            stage = "自動停止: 標的Tagを1秒間再取得できない"
-                    elif target.distance_m is None or target.yaw_degrees is None:
+                            stage = "自動停止: Tag 18を1秒間再取得できない"
+                    elif target.lateral_m is None or target.forward_m is None or target.forward_m <= 0.0:
                         target_missing_since = None
-                        stage = "自動停止: Tagの距離または角度が読めない。1m補正を確認"
+                        stage = "自動停止: Tag 18の位置(x/z)を読めない"
                     else:
                         target_missing_since = None
-                        horizontal_error = robot_center_horizontal_error(
-                            target,
-                            camera_lateral_offset_m=camera_hensuu.camera_lateral_offset_m,
-                            focal_length_px=camera_hensuu.camera_focal_length_px,
-                        )
-                        if abs(horizontal_error) > TAG_CENTER_TOLERANCE:
-                            yaw_aligned_since = None
-                            distance_error_at_check = None
-                            distance_checked_at = None
-                            stage = f"{target_row}段: Tagを画面中央へ旋回中"
-                        elif abs(target.yaw_degrees) > TAG_YAW_TOLERANCE_DEG:
-                            yaw_aligned_since = None
-                            distance_error_at_check = None
-                            distance_checked_at = None
-                            stage = f"{target_row}段: Tag面に垂直へ旋回中"
+                        position_x = target.lateral_m + camera_hensuu.camera_lateral_offset_m
+                        distance_error = target.forward_m - AIM_DISTANCE_M[target_row]
+                        if loop_started - last_position_report_at >= 0.5:
+                            print(
+                                f"Tag {target.tag_id} 位置: x={position_x:+.3f}m "
+                                f"z={target.forward_m:.3f}m "
+                                f"目標z={AIM_DISTANCE_M[target_row]:.3f}m"
+                            )
+                            last_position_report_at = loop_started
+                        if (
+                            abs(position_x) <= AUTO_LATERAL_TOLERANCE_M
+                            and abs(distance_error) <= DISTANCE_TOLERANCE_M
+                        ):
+                            stage = "照準完了: △で持上げ"
                         else:
-                            distance_error = target.distance_m - AIM_DISTANCE_M[target_row]
-                            if abs(distance_error) <= DISTANCE_TOLERANCE_M:
-                                stage = "照準完了: △で持上げ"
-                            else:
-                                # 距離が縮まらない時は、向きや距離計算が逆と判断して
-                                # 停止する。設定ミスでも一方向へ走り続けない。
-                                if distance_checked_at is None:
+                            # x/zのどちらも改善しない場合は、位置計算またはモーター向きが
+                            # 合っていないため停止する。無限に走り続けることはない。
+                            position_error_size = max(abs(position_x), abs(distance_error))
+                            if distance_checked_at is None:
+                                distance_checked_at = loop_started
+                                distance_error_at_check = position_error_size
+                            elif loop_started - distance_checked_at >= AUTO_FORWARD_PROGRESS_SEC:
+                                progress = distance_error_at_check - position_error_size
+                                if progress < AUTO_FORWARD_MIN_PROGRESS_M:
+                                    stage = "自動停止: Tag 18との位置(x/z)が改善しない"
+                                else:
                                     distance_checked_at = loop_started
-                                    distance_error_at_check = abs(distance_error)
-                                elif loop_started - distance_checked_at >= AUTO_FORWARD_PROGRESS_SEC:
-                                    progress = distance_error_at_check - abs(distance_error)
-                                    if progress < AUTO_FORWARD_MIN_PROGRESS_M:
-                                        stage = (
-                                            "自動停止: 距離が縮まらない。"
-                                            "AUTO_FORWARD_DIRECTION を反転して確認"
-                                        )
-                                    else:
-                                        distance_checked_at = loop_started
-                                        distance_error_at_check = abs(distance_error)
+                                    distance_error_at_check = position_error_size
 
-                                if not stage.startswith("自動停止:"):
-                                    auto = MotionCommand(
-                                        forward=max(
-                                            -AUTO_FORWARD_MAX_SPEED,
-                                            min(
-                                                AUTO_FORWARD_MAX_SPEED,
-                                                distance_error * CENTER_GAIN * AUTO_FORWARD_DIRECTION,
-                                            ),
-                                        ),
-                                    )
+                            # xは右が正。Tagが右なら右旋回する。
+                            if not stage.startswith("自動停止:"):
+                                rotate = max(
+                                    -AUTO_POSITION_ROTATE_MAX_SPEED,
+                                    min(
+                                        AUTO_POSITION_ROTATE_MAX_SPEED,
+                                        position_x * AUTO_POSITION_ROTATE_GAIN,
+                                    ),
+                                )
+                                forward = max(
+                                    -AUTO_FORWARD_MAX_SPEED,
+                                    min(
+                                        AUTO_FORWARD_MAX_SPEED,
+                                        distance_error * CENTER_GAIN * AUTO_FORWARD_DIRECTION,
+                                    ),
+                                )
+                                auto = MotionCommand(forward=forward, rotate=rotate)
 
                 # △: GAME3と共通の持上げ動作。
                 elif stage == "照準完了: △で持上げ" and state.was_pressed(Button.TRIANGLE):
