@@ -21,6 +21,7 @@ from rox_mecanum import (
     MaintenanceSite,
     MotionCommand,
     open_camera,
+    robot_center_horizontal_error,
     RobotRuntime,
     TagStore,
 )
@@ -73,8 +74,8 @@ def main() -> None:
             runtime.mecanum.stop()
             return "停止しました"
         if name == "solenoid":
-            robot_actions.game3_cylinder_extend(runtime)
-            return "robot_actions.py のシリンダー伸ばす動作を実行しました"
+            robot_actions.ball_fire(runtime)
+            return "robot_actions.py の ball_fire() を実行しました"
         if name not in commands:
             return "未対応のテストです"
         test_command = commands[name]
@@ -91,15 +92,21 @@ def main() -> None:
         tags = TagStore()
         site = MaintenanceSite(hensuu.dashboard_port, action)
         host = socket.gethostbyname(socket.gethostname())
-        print(f"メンテナンス画面: http://{host}:{hensuu.dashboard_port}")
+        print(f"状態監視サイト: http://{host}:{hensuu.dashboard_port}")
+        print("同じWi-Fiのスマホ・PCからも、このURLのROBOT_IP部分で開けます")
         print("CREATEでブラウザ駆動テストを10秒有効化 / OPTIONSまたはCtrl+Cで停止")
 
         while True:
             started = time.monotonic()
-            image = camera.read()
-            observations = detector.detect(image)
-            tags.update(observations)
-            site.set_frame("left", _jpeg_with_tags(image, observations))
+            camera_error = None
+            try:
+                image = camera.read()
+                observations = detector.detect(image)
+                tags.update(observations)
+                site.set_frame("left", _jpeg_with_tags(image, observations))
+            except Exception as error:
+                # 通信・モーターを止めず、サイト上でカメラ異常として確認できるようにする。
+                camera_error = str(error)
 
             state_info: dict[str, object] = {"camera_only": args.camera_only}
             if runtime is not None:
@@ -115,21 +122,42 @@ def main() -> None:
                 else:
                     runtime.mecanum.drive(runtime.manual_command(state))
                 state_info.update(
-                    active_buttons=[button.value for button in state.active_buttons],
-                    catch=runtime.servos.catch.status(),
-                    lift=runtime.servos.lift.status(),
+                    controller={
+                        "active_buttons": sorted(button.value for button in state.active_buttons),
+                        "left_stick": {"x": round(state.left_stick.x, 3), "y": round(state.left_stick.y, 3), "magnitude": round(state.left_stick.magnitude, 3)},
+                        "right_stick": {"x": round(state.right_stick.x, 3), "y": round(state.right_stick.y, 3), "magnitude": round(state.right_stick.magnitude, 3)},
+                        "l2": round(state.l2, 3),
+                        "r2": round(state.r2, 3),
+                    },
+                    servos={
+                        "catch": runtime.servos.catch.status(),
+                        "lift": runtime.servos.lift.status(),
+                        "pid_error": runtime.servos.pid_error(),
+                    },
+                    mecanum=runtime.mecanum.drive_status(),
                 )
 
             monitored_tag_ids = (
-                game1.TAG_START_PRIMARY, game1.TAG_START_FALLBACK, game1.TAG_GATE,
-                game1.TAG_BOARD_LEFT, game1.TAG_BOARD_RIGHT,
-                game1.TAG_RETURN_LEFT, game1.TAG_RETURN_RIGHT, game1.TAG_GOAL,
+                game1.TAG_GATE,
                 *(tag_id for row in game2.PANEL_ROWS.values() for tag_id in row),
             )
             fresh = tags.fresh(monitored_tag_ids, camera_hensuu.tag_max_age_sec)
             state_info.update(
-                message="カメラ・Tagを確認中",
-                tags={tag_id: {"x_error": round(item.horizontal_error, 3), "distance_m": item.distance_m} for tag_id, item in fresh.items()},
+                message="カメラ異常" if camera_error else "カメラ・Tagを確認中",
+                camera={"connected": camera_error is None, "error": camera_error},
+                tags={
+                    tag_id: {
+                        "image_x_error": round(item.horizontal_error, 3),
+                        "robot_x_error": round(robot_center_horizontal_error(
+                            item,
+                            camera_lateral_offset_m=camera_hensuu.camera_lateral_offset_m,
+                            focal_length_px=camera_hensuu.camera_focal_length_px,
+                        ), 3),
+                        "distance_m": None if item.distance_m is None else round(item.distance_m, 3),
+                        "age_sec": round(max(0.0, started - item.timestamp), 3),
+                    }
+                    for tag_id, item in fresh.items()
+                },
                 test_active=started < test_until,
             )
             site.set_status(**state_info)

@@ -46,3 +46,13 @@ class SerialAtTests(unittest.TestCase):
             normalized_to_at_value(-0.5),
         ])
         self.assertTrue(build_enable_frame(0x0C).startswith(b"AT"))
+
+    def test_drive_status_shows_commands_not_measurements(self) -> None:
+        transport = FakeTransport()
+        robot = MecanumRobot(transport, acceleration_per_second=2.0)
+        robot.drive(MotionCommand(forward=0.5))
+
+        status = robot.drive_status()
+
+        self.assertEqual(status["acceleration_limit_per_sec"], 2.0)
+        self.assertEqual(set(status["wheel_speed_commands"]), {"FL", "FR", "RL", "RR"})

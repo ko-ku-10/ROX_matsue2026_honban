@@ -14,7 +14,12 @@ class MaintenanceSite:
 
     def __init__(self, port: int, action: Callable[[str], str] | None = None) -> None:
         self._lock = threading.Lock()
-        self._status: dict[str, object] = {"running": True, "message": "起動中", "armed": False}
+        self._status: dict[str, object] = {
+            "running": True,
+            "message": "起動中",
+            "armed": False,
+            "controls_available": action is not None,
+        }
         self._frames: dict[str, bytes] = {"left": b"", "right": b""}
         self._armed_until = 0.0
         self._action = action
@@ -109,12 +114,14 @@ class MaintenanceSite:
             return monotonic() < self._armed_until
 
 
-_HTML = """<!doctype html><meta charset=utf-8><title>ROX Maintenance</title>
-<style>body{font-family:sans-serif;background:#111827;color:#eef2ff;margin:20px}img{max-width:48%;border:1px solid #64748b}button{padding:9px;margin:4px}pre{background:#1e293b;padding:12px}</style>
-<h1>ROX メンテナンス</h1><p>駆動テストはコントローラーのCREATEで10秒間だけ有効化されます。</p>
-<img src='/stream/left.mjpg'><img src='/stream/right.mjpg'>
-<p><button onclick=go('forward')>前進テスト</button><button onclick=go('backward')>後退テスト</button><button onclick=go('left')>左スライド</button><button onclick=go('right')>右スライド</button><button onclick=go('solenoid')>ソレノイド</button><button onclick=go('stop')>停止</button></p>
+_HTML = """<!doctype html><meta charset=utf-8><title>ROX 状態監視</title>
+<style>body{font-family:sans-serif;background:#111827;color:#eef2ff;margin:20px;max-width:1100px}img{width:100%;max-width:960px;border:1px solid #64748b}button{padding:9px;margin:4px}pre{background:#1e293b;padding:12px;overflow:auto}small{color:#cbd5e1}</style>
+<h1>ROX 状態監視</h1><p>カメラ映像、Tag、DualSense、catch/lift角度、4輪への速度指令を表示します。</p>
+<p><small>4輪速度・加速値は送信指令です。実測の加速度や車輪角度は、この画面では表示しません。</small></p>
+<img src='/stream/left.mjpg' alt='ロボット正面カメラ映像'>
+<section id=controls><p>駆動テストはコントローラーのCREATEで10秒間だけ有効化されます。</p>
+<p><button onclick=go('forward')>前進テスト</button><button onclick=go('backward')>後退テスト</button><button onclick=go('left')>左スライド</button><button onclick=go('right')>右スライド</button><button onclick=go('solenoid')>発射テスト</button><button onclick=go('stop')>停止</button></p></section>
 <pre id=s>読み込み中...</pre><script>
-async function refresh(){let r=await fetch('/api/status');s.textContent=JSON.stringify(await r.json(),null,2)}
+async function refresh(){let r=await fetch('/api/status');let v=await r.json();s.textContent=JSON.stringify(v,null,2);controls.hidden=!v.controls_available}
 async function go(n){let r=await fetch('/api/action/'+n,{method:'POST'});alert((await r.json()).message)}refresh();setInterval(refresh,200);
 </script>"""

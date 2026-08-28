@@ -9,8 +9,10 @@ from __future__ import annotations
 import time
 from enum import Enum
 
+import camera_hensuu
+import hensuu
 import robot_actions
-from rox_mecanum import Button, MotionCommand, RobotRuntime
+from rox_mecanum import AprilTagDetector, Button, GameStatusSite, MotionCommand, RobotRuntime, TagStore, open_camera
 
 
 # スティックの微妙なずれを無視する範囲。勝手に走るなら少し上げる。
@@ -34,10 +36,32 @@ class Stage(str, Enum):
 def main() -> None:
     print("GAME3: CREATE=地面姿勢・持上げ中リセット / ○=掴む / □=排出 / △=持上げ / R1=発射 / OPTIONS=停止")
     runtime = None
+    camera = None
+    status_site = None
 
     try:
         runtime = RobotRuntime.open()
         robot_actions.setup_gpio()
+        status_site = GameStatusSite("GAME3", hensuu.dashboard_port)
+        print(f"状態監視サイト: {status_site.url()}")
+        tags = TagStore()
+        camera_error = ""
+        try:
+            # GAME3はカメラ異常でも練習走行を止めない。サイトにエラーだけ表示する。
+            camera = open_camera(
+                backend=camera_hensuu.camera_backend,
+                device=camera_hensuu.camera_device,
+                pipe_id=camera_hensuu.mipi_pipe_id,
+                host_index=camera_hensuu.mipi_host_index,
+                fps=camera_hensuu.mipi_fps,
+                width=camera_hensuu.mipi_width,
+                height=camera_hensuu.mipi_height,
+            )
+            detector = AprilTagDetector(camera_hensuu.apriltag_size_m, camera_hensuu.camera_focal_length_px)
+        except Exception as error:
+            camera = None
+            detector = None
+            camera_error = str(error)
 
         stage = Stage.WAIT
         move_started = time.monotonic()
@@ -46,6 +70,17 @@ def main() -> None:
         while True:
             loop_started = time.monotonic()
             state = runtime.controller.read()
+
+            # 監視用のカメラ・Tag処理は10Hzだけ。走行操作の周期を下げない。
+            if camera is not None and detector is not None and status_site.camera_due(loop_started):
+                try:
+                    image = camera.read()
+                    observations = detector.detect(image)
+                    tags.update(observations)
+                    status_site.set_camera_frame(image, observations)
+                    camera_error = ""
+                except Exception as error:
+                    camera_error = str(error)
 
             # OPTIONSは最優先。GPIOもモーターも停止して終了する。
             if state.was_pressed(Button.OPTIONS):
@@ -131,6 +166,18 @@ def main() -> None:
             else:
                 runtime.mecanum.drive(command)
 
+            status_site.update(
+                runtime=runtime,
+                state=state,
+                stage=stage,
+                mode=None,
+                tags=tags,
+                tag_max_age_sec=camera_hensuu.tag_max_age_sec,
+                camera_lateral_offset_m=camera_hensuu.camera_lateral_offset_m,
+                camera_focal_length_px=camera_hensuu.camera_focal_length_px,
+                camera_error=camera_error,
+            )
+
             if stage is not shown_stage:
                 print(f"[{stage.value}]")
                 shown_stage = stage
@@ -144,6 +191,10 @@ def main() -> None:
     finally:
         # エラー、Ctrl+C、OPTIONS、通常終了の全てでGPIOをLOWにする。
         robot_actions.all_off()
+        if status_site is not None:
+            status_site.close()
+        if camera is not None:
+            camera.close()
         if runtime is not None:
             runtime.close()
         robot_actions.close_gpio()

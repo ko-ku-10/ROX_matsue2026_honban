@@ -192,6 +192,17 @@ class MecanumRobot:
         self._last_wheel_speeds = {name: 0.0 for name in ("FL", "FR", "RL", "RR")}
         self._last_drive_at = None
 
+    def drive_status(self) -> dict[str, object]:
+        """最後に送った4輪の速度指令を状態表示用に返す。
+
+        これはモーターから読み返した実測速度・実測加速度ではない。
+        EDULITE05へ送信した値と、設定している加速制限だけを表示する。
+        """
+        return {
+            "wheel_speed_commands": dict(self._last_wheel_speeds),
+            "acceleration_limit_per_sec": self.acceleration_per_second,
+        }
+
     def _apply_acceleration_limit(self, target: Mapping[str, float]) -> WheelSpeeds:
         """目標速度へ急に変えず、1輪ずつ少しずつ近づける。"""
         if self.acceleration_per_second is None:

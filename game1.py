@@ -10,10 +10,12 @@ from __future__ import annotations
 import time
 
 import camera_hensuu
+import hensuu
 import robot_actions
 from rox_mecanum import (
     AprilTagDetector,
     Button,
+    GameStatusSite,
     ModeController,
     MotionCommand,
     RobotRuntime,
@@ -52,6 +54,7 @@ def main() -> None:
 
     runtime = None
     camera = None
+    status_site = None
 
     try:
         runtime = RobotRuntime.open()
@@ -68,6 +71,8 @@ def main() -> None:
         detector = AprilTagDetector(camera_hensuu.apriltag_size_m, camera_hensuu.camera_focal_length_px)
         tags = TagStore()
         mode = ModeController()
+        status_site = GameStatusSite("GAME1", hensuu.dashboard_port)
+        print(f"状態監視サイト: {status_site.url()}")
 
         stage = "手動走行"
         forward_until = 0.0
@@ -95,10 +100,16 @@ def main() -> None:
             # スティック操作のラグを防ぐ。↑を押した時と中心合わせ中だけ読む。
             start_gate = mode.auto_enabled and state.was_pressed(Button.DPAD_UP)
             needs_tag_frame = start_gate or stage == "Tag8を画面中央へ合わせ中"
+            # 手動時もサイトの映像を見られるよう10Hzでカメラを更新する。
+            dashboard_camera_due = status_site.camera_due(loop_started)
             camera_error = ""
-            if needs_tag_frame:
+            if needs_tag_frame or dashboard_camera_due:
                 try:
-                    tags.update(detector.detect(camera.read()))
+                    image = camera.read()
+                    observations = detector.detect(image)
+                    tags.update(observations)
+                    if dashboard_camera_due:
+                        status_site.set_camera_frame(image, observations)
                 except Exception as error:
                     camera_error = str(error)
 
@@ -155,6 +166,17 @@ def main() -> None:
             # 自動中もスティックで微調整できる。手動モードではスティックだけ使う。
             command = add_manual_command(auto, runtime.manual_command(state), mode.auto_enabled)
             runtime.mecanum.drive(command)
+            status_site.update(
+                runtime=runtime,
+                state=state,
+                stage=stage,
+                mode=mode.mode,
+                tags=tags,
+                tag_max_age_sec=camera_hensuu.tag_max_age_sec,
+                camera_lateral_offset_m=camera_hensuu.camera_lateral_offset_m,
+                camera_focal_length_px=camera_hensuu.camera_focal_length_px,
+                camera_error=camera_error,
+            )
 
             if stage != shown_stage:
                 print(f"[{mode.mode.value}] {stage}")
@@ -168,6 +190,8 @@ def main() -> None:
             runtime.emergency_stop()
     finally:
         robot_actions.all_off()
+        if status_site is not None:
+            status_site.close()
         if camera is not None:
             camera.close()
         if runtime is not None:

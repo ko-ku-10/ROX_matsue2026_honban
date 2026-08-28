@@ -44,6 +44,7 @@ from .autonomy import ControlMode, ModeController, TimedMotion, add_manual_comma
 from .vision import AprilTagDetector, OpenCVSingleCamera, OpenCVStereoCamera, RDKMIPICamera, RDKMIPIStereoCamera, TagObservation, TagStore, midpoint, open_camera, open_stereo_camera, robot_center_horizontal_error
 from .runtime import RobotRuntime
 from .maintenance_site import MaintenanceSite
+from .game_status_site import GameStatusSite
 from .targeting import PanelTarget, choose_panel_target
 from .ball_mechanism import BallMechanism
 
@@ -102,6 +103,7 @@ __all__ = [
     "robot_center_horizontal_error",
     "RobotRuntime",
     "MaintenanceSite",
+    "GameStatusSite",
     "PanelTarget",
     "choose_panel_target",
 ]

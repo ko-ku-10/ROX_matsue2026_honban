@@ -9,10 +9,12 @@ from __future__ import annotations
 import time
 
 import camera_hensuu
+import hensuu
 import robot_actions
 from rox_mecanum import (
     AprilTagDetector,
     Button,
+    GameStatusSite,
     ModeController,
     MotionCommand,
     RobotRuntime,
@@ -58,6 +60,7 @@ def main() -> None:
     print("  自動: CREATE=照準/持上げ中リセット, △=持上げ, L1=発射")
     runtime = None
     camera = None
+    status_site = None
 
     try:
         runtime = RobotRuntime.open()
@@ -74,6 +77,8 @@ def main() -> None:
         detector = AprilTagDetector(camera_hensuu.apriltag_size_m, camera_hensuu.camera_focal_length_px)
         tags = TagStore()
         mode = ModeController()
+        status_site = GameStatusSite("GAME2", hensuu.dashboard_port)
+        print(f"状態監視サイト: {status_site.url()}")
 
         stage = "補給待ち: CREATEで照準開始"
         target_ids = None
@@ -87,7 +92,11 @@ def main() -> None:
 
             # カメラが失敗した場合、今の自動動作は止める。
             try:
-                tags.update(detector.detect(camera.read()))
+                image = camera.read()
+                observations = detector.detect(image)
+                tags.update(observations)
+                if status_site.camera_due(loop_started):
+                    status_site.set_camera_frame(image, observations)
                 camera_error = ""
             except Exception as error:
                 camera_error = str(error)
@@ -231,6 +240,17 @@ def main() -> None:
             # 自動速度へ手動スティックを足す。完全手動なら手動だけになる。
             command = add_manual_command(auto, runtime.manual_command(state), mode.auto_enabled)
             runtime.mecanum.drive(command)
+            status_site.update(
+                runtime=runtime,
+                state=state,
+                stage=stage,
+                mode=mode.mode,
+                tags=tags,
+                tag_max_age_sec=camera_hensuu.tag_max_age_sec,
+                camera_lateral_offset_m=camera_hensuu.camera_lateral_offset_m,
+                camera_focal_length_px=camera_hensuu.camera_focal_length_px,
+                camera_error=camera_error,
+            )
 
             if stage != shown_stage:
                 print(f"[{mode.mode.value}] {stage}  target={target_ids} row={target_row}")
@@ -244,6 +264,8 @@ def main() -> None:
             runtime.emergency_stop()
     finally:
         robot_actions.all_off()
+        if status_site is not None:
+            status_site.close()
         if camera is not None:
             camera.close()
         if runtime is not None:
