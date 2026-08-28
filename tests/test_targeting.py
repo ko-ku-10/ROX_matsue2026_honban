@@ -25,3 +25,9 @@ def test_two_panels_selects_between_them() -> None:
     target = choose_panel_target(_store(14, 16), ROWS, 1.0)
     assert target is not None
     assert target.tag_ids == (14, 16)
+
+
+def test_three_panels_selects_an_adjacent_pair_not_the_center_panel() -> None:
+    target = choose_panel_target(_store(14, 15, 16), ROWS, 1.0)
+    assert target is not None
+    assert target.tag_ids == (14, 15)

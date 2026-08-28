@@ -22,6 +22,7 @@ from rox_mecanum import (
     VisionWorker,
     add_manual_command,
     choose_panel_target,
+    midpoint,
     open_camera,
 )
 
@@ -272,7 +273,7 @@ def main() -> None:
                         distance_error_at_check = None
                         distance_checked_at = None
                         print(
-                            f"Tag {target_ids[0]}を選択: 位置x=0m・"
+                            f"Tag {', '.join(str(item) for item in target_ids)}を選択: 位置x=0m・"
                             f"{AIM_DISTANCE_M[target_row]:.2f}mまで近づきます"
                         )
                         stage = f"{target_row}段: Tag位置(x/z)へ照準中"
@@ -282,18 +283,21 @@ def main() -> None:
                         auto_debug["判断"] = "探索時間切れ。停止"
 
                 # x はTagのカメラ座標の左右[m]、z は正面距離[m]。
-                # 1. Tag面を垂直にする → 2. 横移動で正面へ → 3. 前後距離を合わせる。
-                # 横位置を旋回で合わせないため、最後もTag面に垂直な向きを保てる。
+                # 1. 横移動で正面へ → 2. 前後距離を合わせる → 3. Tag面を垂直にする。
                 elif target_row is not None and stage == f"{target_row}段: Tag位置(x/z)へ照準中":
-                    target = tags.get(target_ids[0], AUTO_TAG_MAX_AGE_SEC) if target_ids else None
+                    first = tags.get(target_ids[0], AUTO_TAG_MAX_AGE_SEC) if target_ids else None
+                    last = tags.get(target_ids[-1], AUTO_TAG_MAX_AGE_SEC) if target_ids else None
+                    # 2枚を狙う時は、必ず2枚の中間を仮想Tagとして使う。
+                    # 片方だけでは「2枚の間」が分からないので、その場で再読取りを待つ。
+                    target = first if target_ids and len(target_ids) == 1 else midpoint(first, last) if first and last else None
                     if target is None:
-                        auto_debug["判断"] = "Tag 18が未受信。再取得を待機"
+                        auto_debug["判断"] = "標的Tagが未受信。再取得を待機"
                         if target_missing_since is None:
                             target_missing_since = loop_started
                         vision_worker.request_tag_read()
                         if loop_started - target_missing_since >= TAG_REACQUIRE_TIMEOUT_SEC:
-                            stage = "自動停止: Tag 18を1秒間再取得できない"
-                            auto_debug["判断"] = "Tag未受信が1秒継続。停止"
+                            stage = "自動停止: 標的Tagを1秒間再取得できない"
+                            auto_debug["判断"] = "標的Tag未受信が1秒継続。停止"
                     elif (
                         target.lateral_m is None
                         or target.forward_m is None
@@ -301,7 +305,7 @@ def main() -> None:
                         or target.yaw_degrees is None
                     ):
                         target_missing_since = None
-                        stage = "自動停止: Tag 18の位置(x/z/yaw)を読めない"
+                        stage = "自動停止: 標的Tagの位置(x/z/yaw)を読めない"
                         auto_debug["判断"] = "x・z・yawのどれかが無効。停止"
                     else:
                         target_missing_since = None
@@ -338,7 +342,7 @@ def main() -> None:
                         })
                         if loop_started - last_position_report_at >= 0.5:
                             print(
-                                f"Tag {target.tag_id} 位置: x={position_x:+.3f}m "
+                                f"Tag {', '.join(str(item) for item in target_ids)} 位置: x={position_x:+.3f}m "
                                 f"z={target.forward_m:.3f}m "
                                 f"yaw={robot_yaw_error:+.2f}° "
                                 f"目標z={AIM_DISTANCE_M[target_row]:.3f}m"
