@@ -65,6 +65,7 @@ class GameStatusSite:
         camera_lateral_offset_m: float,
         camera_focal_length_px: float,
         camera_error: str = "",
+        auto_debug: dict[str, object] | None = None,
     ) -> None:
         """現在のゲーム状態をサイトへ反映する。"""
         now = monotonic()
@@ -106,6 +107,7 @@ class GameStatusSite:
             mecanum=runtime.mecanum.drive_status(),
             camera={"connected": not bool(camera_error), "error": camera_error or None},
             tags=tag_values,
+            auto_debug=dict(auto_debug or {}),
             message="カメラ異常" if camera_error else "状態を更新中",
         )
 

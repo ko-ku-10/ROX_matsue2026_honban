@@ -192,6 +192,14 @@ def main() -> None:
                 stage = "Tag14〜22を探して照準開始待ち"
 
             auto = MotionCommand.stop()
+            # サイトに出す、GAME2の判断根拠。ここは駆動には使わない表示専用の値。
+            auto_debug: dict[str, object] = {
+                "自動モード": mode.auto_enabled,
+                "現在の段階": stage,
+                "判断": "完全手動中" if not mode.auto_enabled else "開始ボタンを待機中",
+                "目標Tag": "なし" if target_ids is None else ", ".join(str(item) for item in target_ids),
+                "目標段": target_row or "なし",
+            }
 
             if camera_error:
                 stage = "自動停止: カメラエラー"
@@ -228,6 +236,7 @@ def main() -> None:
             if mode.auto_enabled and not camera_error:
                 # 照準テスト中はTag 18だけを使う。Noneなら上→中央→下で選ぶ。
                 if stage == "Tag14〜22を探して照準開始待ち":
+                    auto_debug["判断"] = "Tag 18を探索中"
                     if TEST_FIXED_TAG_ID is not None:
                         fixed_target = tags.get(TEST_FIXED_TAG_ID, AUTO_TAG_MAX_AGE_SEC)
                         if fixed_target is not None:
@@ -255,8 +264,10 @@ def main() -> None:
                             f"{AIM_DISTANCE_M[target_row]:.2f}mまで近づきます"
                         )
                         stage = f"{target_row}段: Tag位置(x/z)へ照準中"
+                        auto_debug["判断"] = "Tagを発見。x/z位置照準を開始"
                     elif tag_search_started_at is None or time.monotonic() - tag_search_started_at >= TAG_SEARCH_TIMEOUT_SEC:
                         stage = "自動停止: Tag14〜22を見つけられない"
+                        auto_debug["判断"] = "探索時間切れ。停止"
 
                 # zidou/mecanum.py と同じ位置制御。
                 # x はTagのカメラ座標の左右[m]、z は正面距離[m]。
@@ -264,18 +275,31 @@ def main() -> None:
                 elif target_row is not None and stage == f"{target_row}段: Tag位置(x/z)へ照準中":
                     target = tags.get(target_ids[0], AUTO_TAG_MAX_AGE_SEC) if target_ids else None
                     if target is None:
+                        auto_debug["判断"] = "Tag 18が未受信。再取得を待機"
                         if target_missing_since is None:
                             target_missing_since = loop_started
                         vision_worker.request_tag_read()
                         if loop_started - target_missing_since >= TAG_REACQUIRE_TIMEOUT_SEC:
                             stage = "自動停止: Tag 18を1秒間再取得できない"
+                            auto_debug["判断"] = "Tag未受信が1秒継続。停止"
                     elif target.lateral_m is None or target.forward_m is None or target.forward_m <= 0.0:
                         target_missing_since = None
                         stage = "自動停止: Tag 18の位置(x/z)を読めない"
+                        auto_debug["判断"] = "xまたはzが無効。停止"
                     else:
                         target_missing_since = None
                         position_x = target.lateral_m + camera_hensuu.camera_lateral_offset_m
                         distance_error = target.forward_m - AIM_DISTANCE_M[target_row]
+                        auto_debug.update({
+                            "Tag 18 x[m]": round(position_x, 3),
+                            "Tag 18 z[m]": round(target.forward_m, 3),
+                            "目標 x[m]": 0.0,
+                            "目標 z[m]": round(AIM_DISTANCE_M[target_row], 3),
+                            "x誤差[m]": round(position_x, 3),
+                            "z誤差[m]": round(distance_error, 3),
+                            "x到達": abs(position_x) <= AUTO_LATERAL_TOLERANCE_M,
+                            "z到達": abs(distance_error) <= DISTANCE_TOLERANCE_M,
+                        })
                         if loop_started - last_position_report_at >= 0.5:
                             print(
                                 f"Tag {target.tag_id} 位置: x={position_x:+.3f}m "
@@ -288,6 +312,7 @@ def main() -> None:
                             and abs(distance_error) <= DISTANCE_TOLERANCE_M
                         ):
                             stage = "照準完了: △で持上げ"
+                            auto_debug["判断"] = "x/zとも許容範囲内。照準完了"
                         else:
                             # x/zのどちらも改善しない場合は、位置計算またはモーター向きが
                             # 合っていないため停止する。無限に走り続けることはない。
@@ -299,6 +324,7 @@ def main() -> None:
                                 progress = distance_error_at_check - position_error_size
                                 if progress < AUTO_FORWARD_MIN_PROGRESS_M:
                                     stage = "自動停止: Tag 18との位置(x/z)が改善しない"
+                                    auto_debug["判断"] = "0.7秒間、x/z誤差が改善しないため停止"
                                 else:
                                     distance_checked_at = loop_started
                                     distance_error_at_check = position_error_size
@@ -320,6 +346,12 @@ def main() -> None:
                                     ),
                                 )
                                 auto = MotionCommand(forward=forward, rotate=rotate)
+                                auto_debug.update({
+                                    "判断": "x誤差で旋回、z誤差で前後移動",
+                                    "自動 前後": round(forward, 3),
+                                    "自動 横": 0.0,
+                                    "自動 旋回": round(rotate, 3),
+                                })
 
                 # △: GAME3と共通の持上げ動作。
                 elif stage == "照準完了: △で持上げ" and state.was_pressed(Button.TRIANGLE):
@@ -352,7 +384,17 @@ def main() -> None:
                     stage = "発射完了: 手動で戻る"
 
             # 自動速度へ手動スティックを足す。完全手動なら手動だけになる。
-            command = add_manual_command(auto, runtime.manual_command(state), mode.auto_enabled)
+            manual = runtime.manual_command(state)
+            command = add_manual_command(auto, manual, mode.auto_enabled)
+            auto_debug.update({
+                "手動 前後": round(manual.forward, 3),
+                "手動 横": round(manual.strafe, 3),
+                "手動 旋回": round(manual.rotate, 3),
+                "最終 前後": round(command.forward, 3),
+                "最終 横": round(command.strafe, 3),
+                "最終 旋回": round(command.rotate, 3),
+                "現在の段階": stage,
+            })
             runtime.mecanum.drive(command)
             status_site.update(
                 runtime=runtime,
@@ -364,6 +406,7 @@ def main() -> None:
                 camera_lateral_offset_m=camera_hensuu.camera_lateral_offset_m,
                 camera_focal_length_px=camera_hensuu.camera_focal_length_px,
                 camera_error=camera_error,
+                auto_debug=auto_debug,
             )
 
             if stage != shown_stage:
