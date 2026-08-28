@@ -22,6 +22,7 @@ from rox_mecanum import (
     VisionWorker,
     add_manual_command,
     choose_panel_target,
+    face_target_command,
     midpoint,
     open_camera,
     robot_center_horizontal_error,
@@ -38,14 +39,30 @@ CENTER_GAIN = 0.45
 CENTER_TOLERANCE = 0.08
 DISTANCE_TOLERANCE_M = 0.08
 
+# Tagの中央・角度合わせはGAME1と同じ共通設定を使う。
+TAG_CENTER_TOLERANCE = camera_hensuu.tag_center_tolerance
+TAG_CENTER_STABLE_SEC = camera_hensuu.tag_center_stable_sec
+TAG_ROTATE_GAIN = camera_hensuu.tag_rotate_gain
+TAG_ROTATE_MAX_SPEED = camera_hensuu.tag_rotate_max_speed
+TAG_YAW_TRUST_CENTER_ERROR = camera_hensuu.tag_yaw_trust_center_error
+TAG_YAW_TOLERANCE_DEG = camera_hensuu.tag_yaw_tolerance_deg
+TAG_YAW_GAIN = camera_hensuu.tag_yaw_gain
+TAG_YAW_DIRECTION = camera_hensuu.tag_yaw_direction
+
+# ↑を押してからTag14〜22を見つけるまでの前進設定。
+# 見つからないまま走り続けないよう、最大時間を必ず決めておく。
+TAG_SEARCH_SPEED = 0.15
+TAG_SEARCH_TIMEOUT_SEC = 5.0
+
 LIFT_TIMEOUT_SEC = 8.0
 
-# パネルのTag番号。中央段 → 上段 → 下段の順に狙う。
+# パネルのTag番号。発射する段の優先順は上 → 中央 → 下。
 PANEL_ROWS = {
     "middle": (17, 18, 19),
     "top": (14, 15, 16),
     "bottom": (20, 21, 22),
 }
+PANEL_PRIORITY = ("top", "middle", "bottom")
 
 # 段ごとの照準距離[m]。前進を止めて横スライド照準へ切り替える距離。
 # 中段・上段・下段で当たりやすい距離を、それぞれ実射して入力する。
@@ -58,7 +75,7 @@ AIM_DISTANCE_M = {
 def main() -> None:
     print("GAME2: タッチパッド=手動/自動")
     print("  手動: CREATE/×=地面姿勢, ○=掴む, □=排出, △=持上げ, R1=発射")
-    print("  自動: CREATE=照準/持上げ中リセット, △=持上げ, L1=発射")
+    print("  自動: ↑=Tag14〜22を探して照準開始, △=持上げ, L1=ソレノイド発射")
     runtime = None
     camera = None
     status_site = None
@@ -87,10 +104,12 @@ def main() -> None:
         vision_worker.start()
         print(f"状態監視サイト: {status_site.url()}")
 
-        stage = "補給待ち: CREATEで照準開始"
+        stage = "補給後待ち: ↑で照準開始"
         target_ids = None
         target_row = None
         lift_action = None
+        tag_search_started_at = None
+        yaw_aligned_since = None
         shown_stage = None
 
         while True:
@@ -118,9 +137,11 @@ def main() -> None:
                     robot_actions.cancel_ball_lift_for_shot(lift_action, runtime)
                     lift_action = None
                 runtime.servos.hold_all_current()
-                stage = "補給待ち: CREATEで照準開始"
+                stage = "補給後待ち: ↑で照準開始"
                 target_ids = None
                 target_row = None
+                tag_search_started_at = None
+                yaw_aligned_since = None
                 print(f"モード: {'自動' if mode.auto_enabled else '完全手動'}")
 
             auto = MotionCommand.stop()
@@ -158,26 +179,83 @@ def main() -> None:
                     stage = "完全手動: 持上げ完了"
 
             if mode.auto_enabled and not camera_error:
-                # CREATE: 見えているパネルから、中央→上→下の順に標的を決める。
-                if stage == "補給待ち: CREATEで照準開始" and state.was_pressed(Button.CREATE):
-                    choice = choose_panel_target(tags, PANEL_ROWS, camera_hensuu.tag_max_age_sec)
-                    if choice is None:
-                        stage = "自動停止: Tag14〜22が見えない"
-                    elif choice.row not in AIM_DISTANCE_M:
-                        stage = "自動停止: 段の発射距離が未設定"
-                    else:
-                        target_ids = choice.tag_ids
-                        target_row = choice.row
-                        robot_actions.game2_ground_pose(runtime)
-                        stage = "地面走行姿勢へ移動中"
+                # ↑: ボール装填後に照準を開始する。
+                # この時点ではTagが見えていなくても、低速前進しながら探索する。
+                if stage == "補給後待ち: ↑で照準開始" and state.was_pressed(Button.DPAD_UP):
+                    robot_actions.game2_ground_pose(runtime)
+                    tag_search_started_at = time.monotonic()
+                    stage = "地面走行姿勢へ移動中"
 
                 # ボールを地面に付ける姿勢に着くまで、自動走行しない。
                 elif stage == "地面走行姿勢へ移動中":
                     if runtime.servos.catch.is_at_target() and runtime.servos.lift.is_at_target():
-                        stage = "標的へ前進中"
+                        stage = "Tag14〜22を探索しながら前進中"
 
-                # Tagを中心・指定距離へ近づける。
-                elif stage == "標的へ前進中":
+                # Tagが見えるまで前進する。段は上→中央→下の順で選ぶ。
+                elif stage == "Tag14〜22を探索しながら前進中":
+                    choice = choose_panel_target(
+                        tags,
+                        PANEL_ROWS,
+                        camera_hensuu.tag_max_age_sec,
+                        priority=PANEL_PRIORITY,
+                    )
+                    if choice is not None and choice.row in AIM_DISTANCE_M:
+                        target_ids = choice.tag_ids
+                        target_row = choice.row
+                        yaw_aligned_since = None
+                        stage = f"{choice.row}段: 正面へ向き合わせ中"
+                    elif tag_search_started_at is None or time.monotonic() - tag_search_started_at >= TAG_SEARCH_TIMEOUT_SEC:
+                        stage = "自動停止: Tag14〜22を見つけられない"
+                    else:
+                        auto = MotionCommand(forward=TAG_SEARCH_SPEED)
+
+                # 画面中央でのみTag面の角度を信用して、ロボットを正面へ向ける。
+                # 画面端のTagは探索に使えても、ここでは角度補正に使わない。
+                elif target_row is not None and stage == f"{target_row}段: 正面へ向き合わせ中":
+                    first = tags.get(target_ids[0], camera_hensuu.tag_max_age_sec) if target_ids else None
+                    last = tags.get(target_ids[-1], camera_hensuu.tag_max_age_sec) if target_ids else None
+                    target = first if target_ids and len(target_ids) == 1 else midpoint(first, last) if first and last else None
+                    if target is None:
+                        stage = "自動停止: 標的Tagを見失った"
+                    else:
+                        horizontal_error = robot_center_horizontal_error(
+                            target,
+                            camera_lateral_offset_m=camera_hensuu.camera_lateral_offset_m,
+                            focal_length_px=camera_hensuu.camera_focal_length_px,
+                        )
+                        if abs(horizontal_error) > TAG_CENTER_TOLERANCE:
+                            yaw_aligned_since = None
+                            auto = face_target_command(
+                                target,
+                                center_tolerance=TAG_CENTER_TOLERANCE,
+                                rotation_gain=TAG_ROTATE_GAIN,
+                                maximum_speed=TAG_ROTATE_MAX_SPEED,
+                                horizontal_error=horizontal_error,
+                            )
+                        elif (
+                            abs(horizontal_error) > TAG_YAW_TRUST_CENTER_ERROR
+                            or target.yaw_degrees is None
+                        ):
+                            stage = "自動停止: 中央でTag角度を読めない"
+                        elif abs(target.yaw_degrees) > TAG_YAW_TOLERANCE_DEG:
+                            yaw_aligned_since = None
+                            auto = MotionCommand(
+                                rotate=max(
+                                    -TAG_ROTATE_MAX_SPEED,
+                                    min(
+                                        TAG_ROTATE_MAX_SPEED,
+                                        target.yaw_degrees * TAG_YAW_GAIN * TAG_YAW_DIRECTION,
+                                    ),
+                                ),
+                            )
+                        elif yaw_aligned_since is None:
+                            yaw_aligned_since = loop_started
+                        elif loop_started - yaw_aligned_since >= TAG_CENTER_STABLE_SEC:
+                            stage = f"{target_row}段: 指定距離へ前進中"
+
+                # 段別に設定した距離へ前後だけで合わせる。
+                # 横ずれは次の段階でだけ補正するため、狙いを横に動かさない。
+                elif target_row is not None and stage == f"{target_row}段: 指定距離へ前進中":
                     first = tags.get(target_ids[0], camera_hensuu.tag_max_age_sec) if target_ids else None
                     last = tags.get(target_ids[-1], camera_hensuu.tag_max_age_sec) if target_ids else None
                     target = first if target_ids and len(target_ids) == 1 else midpoint(first, last) if first and last else None
@@ -190,12 +268,19 @@ def main() -> None:
                             camera_lateral_offset_m=camera_hensuu.camera_lateral_offset_m,
                             focal_length_px=camera_hensuu.camera_focal_length_px,
                         )
-                        auto = MotionCommand(
-                            forward=max(-AUTO_SPEED, min(AUTO_SPEED, (target.distance_m - distance) * CENTER_GAIN)),
-                            strafe=horizontal_error * CENTER_GAIN,
-                        )
-                        if abs(target.distance_m - distance) <= DISTANCE_TOLERANCE_M:
-                            stage = "横スライド照準中"
+                        if (
+                            abs(horizontal_error) > TAG_CENTER_TOLERANCE
+                            or target.yaw_degrees is None
+                            or abs(target.yaw_degrees) > TAG_YAW_TOLERANCE_DEG
+                        ):
+                            yaw_aligned_since = None
+                            stage = f"{target_row}段: 正面へ向き合わせ中"
+                        else:
+                            auto = MotionCommand(
+                                forward=max(-AUTO_SPEED, min(AUTO_SPEED, (target.distance_m - distance) * CENTER_GAIN)),
+                            )
+                            if abs(target.distance_m - distance) <= DISTANCE_TOLERANCE_M:
+                                stage = "横スライド照準中"
 
                 # 前後移動を止め、横だけで中心に合わせる。
                 elif stage == "横スライド照準中":
@@ -227,6 +312,8 @@ def main() -> None:
                         lift_action = None
                         target_ids = None
                         target_row = None
+                        tag_search_started_at = None
+                        yaw_aligned_since = None
                         stage = "リセット中: 地面ドリブル姿勢へ"
                     elif lift_action is not None and lift_action.update():
                         lift_action = None
@@ -234,12 +321,12 @@ def main() -> None:
 
                 elif stage == "リセット中: 地面ドリブル姿勢へ":
                     if runtime.servos.catch.is_at_target() and runtime.servos.lift.is_at_target():
-                        stage = "補給待ち: CREATEで照準開始"
+                        stage = "補給後待ち: ↑で照準開始"
 
                 # L1: GAME3と共通の発射動作を実行する。
                 elif stage == "発射準備完了: L1で発射" and state.was_pressed(Button.L1):
                     robot_actions.ball_fire(runtime)
-                    stage = "発射完了: 手動で続行"
+                    stage = "発射完了: 手動で戻る"
 
             # 自動速度へ手動スティックを足す。完全手動なら手動だけになる。
             command = add_manual_command(auto, runtime.manual_command(state), mode.auto_enabled)

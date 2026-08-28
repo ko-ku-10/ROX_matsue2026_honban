@@ -25,3 +25,21 @@ tag_max_age_sec = 0.35
 # 実測した取付け位置（例: 右へ5cmなら +0.05）を入力する。
 # Tagの距離に応じて画像上の中心位置を補正し、ロボット中心がTagへ向くようにする。
 camera_lateral_offset_m = 0.0
+
+# ==================================================
+# Tagを正面から見るための共通設定（GAME1・GAME2共通）
+# ==================================================
+# まずTagを画像・ロボットの中央へ寄せる許容値。左=-1、右=+1。
+tag_center_tolerance = 0.03
+# Tagがこの範囲にある時だけ、Tag面の角度(yaw)を信用する。
+# 魚眼カメラの端では角度が大きく狂いやすいため、端のTagは発見用だけにする。
+tag_yaw_trust_center_error = 0.12
+# 中央へ向く旋回の設定。
+tag_rotate_gain = 0.60
+tag_rotate_max_speed = 0.20
+tag_center_stable_sec = 0.30
+# Tag面がロボット正面と平行とみなす角度。
+tag_yaw_tolerance_deg = 4.0
+tag_yaw_gain = 0.020
+# 実機で角度合わせだけが逆回転なら -1.0 に変える。
+tag_yaw_direction = 1.0

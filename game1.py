@@ -35,17 +35,14 @@ from rox_mecanum import (
 TAG_GATE = 8
 
 # Tag 8を画面中央へ向ける時の設定。
-# 画像中心からのずれ。小さいほど正面を厳密に合わせる。
-TAG_CENTER_TOLERANCE = 0.03
-# 一瞬だけ中心を横切った場合に前進しないよう、正面を保つ必要がある時間。
-TAG_CENTER_STABLE_SEC = 0.30
-TAG_ROTATE_GAIN = 0.60
-TAG_ROTATE_MAX_SPEED = 0.20
-# Tag面の向きも正面にする設定。カメラ未校正時は近似値になる。
-TAG_YAW_TOLERANCE_DEG = 4.0
-TAG_YAW_GAIN = 0.020
-# 実機で角度合わせが逆に回る時だけ -1.0 に変更する。
-TAG_YAW_DIRECTION = 1.0
+# GAME2と同じ設定を camera_hensuu.py から読む。
+TAG_CENTER_TOLERANCE = camera_hensuu.tag_center_tolerance
+TAG_CENTER_STABLE_SEC = camera_hensuu.tag_center_stable_sec
+TAG_ROTATE_GAIN = camera_hensuu.tag_rotate_gain
+TAG_ROTATE_MAX_SPEED = camera_hensuu.tag_rotate_max_speed
+TAG_YAW_TOLERANCE_DEG = camera_hensuu.tag_yaw_tolerance_deg
+TAG_YAW_GAIN = camera_hensuu.tag_yaw_gain
+TAG_YAW_DIRECTION = camera_hensuu.tag_yaw_direction
 
 # Tag8の正面へ近づく設定。距離はカメラが読み取った値[m]。
 TAG8_TARGET_DISTANCE_M = 1.0
