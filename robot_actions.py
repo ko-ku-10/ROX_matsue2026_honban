@@ -27,7 +27,7 @@ lift_orosu = 0
 # 以前の「下ろす106度 → 持上げ20度」の差を、ストッパー原点へ換算した仮値。
 # 実機で発射台に合う角度を確認してから自由に変える。
 lift_motiage = -90
-catch_hozi = 41
+catch_hozi = 38
 catch_machi = 0
 # 地面で保持する角度とは別に、持上げ中にボールを保持できる角度。
 catch_motiage = 50
@@ -62,7 +62,7 @@ def setup_gpio():
     # 2つ同時にONには絶対にしない。
     GPIO.output(CYLINDER_EXTEND_PIN, GPIO.LOW)
     time.sleep(CYLINDER_SWITCH_OFF_SEC)
-    GPIO.output(CYLINDER_RETRACT_PIN, GPIO.HIGH)
+    GPIO.output(CYLINDER_RETRACT_PIN, GPIO.LOW)
 
 
 def all_off():
@@ -241,6 +241,7 @@ def ball_fire(runtime):
     GPIO.output(CYLINDER_RETRACT_PIN, GPIO.HIGH)
     time.sleep(0.5)
     # 戻す側はOFFにしない。待機中もシリンダーを戻った位置に保つ。
+    GPIO.output(CYLINDER_EXTEND_PIN, GPIO.LOW)
     GPIO.output(CYLINDER_EXTEND_PIN, GPIO.LOW)
 
 
