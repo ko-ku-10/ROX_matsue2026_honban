@@ -46,7 +46,7 @@ AUTO_POSITION_ROTATE_MAX_SPEED = 0.20
 # 設定距離へ近づく時の許容誤差[m]。
 DISTANCE_TOLERANCE_M = 0.08
 # 自動で前後へ動く向き。前後が逆なら -1.0 に変える。
-AUTO_FORWARD_DIRECTION = 1.0
+AUTO_FORWARD_DIRECTION = -1.0
 # 前後移動中に距離誤差が改善しているか確認する間隔と最小改善量。
 # 向き・距離計算が逆でも、走り続けないための安全停止である。
 AUTO_FORWARD_PROGRESS_SEC = 0.70
@@ -80,14 +80,14 @@ PANEL_PRIORITY = ("top", "middle", "bottom")
 
 # 照準の実機テスト中は、狙うTagを1枚だけに固定する。
 # 18番の確認が終わったら ``None`` に戻すと、上→中→下の自動選択へ戻る。
-TEST_FIXED_TAG_ID = 18
+TEST_FIXED_TAG_ID = None
 
 # 段ごとの発射距離[m]。中段・上段・下段で当たりやすい距離を、
 # それぞれ実射して入力する。距離はカメラレンズからTag面まで。
 AIM_DISTANCE_M = {
-    "middle": 1.20,
-    "top": 1.20,
-    "bottom": 1.20,
+    "middle": 4.00, 
+    "top": 3.10,
+    "bottom": 4.50
 }
 
 def main() -> None:
