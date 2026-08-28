@@ -43,6 +43,10 @@ AUTO_LATERAL_TOLERANCE_M = 0.06
 # zidou/mecanum.py と同じ、Tag位置 x からの旋回制御。
 AUTO_POSITION_ROTATE_GAIN = 0.60
 AUTO_POSITION_ROTATE_MAX_SPEED = 0.20
+# カメラ角度は1フレームごとに少し揺れるので、過去値と混ぜて滑らかにする。
+AUTO_YAW_FILTER_ALPHA = 0.25
+# 旋回を始める時の最低速度。小さすぎる指令で「ちょこっ」と止まるのを防ぐ。
+AUTO_ROTATE_MIN_SPEED = 0.06
 # 設定距離へ近づく時の許容誤差[m]。
 DISTANCE_TOLERANCE_M = 0.08
 # 自動で前後へ動く向き。前後が逆なら -1.0 に変える。
@@ -132,6 +136,7 @@ def main() -> None:
         distance_error_at_check = None
         distance_checked_at = None
         last_position_report_at = 0.0
+        filtered_robot_yaw = None
         shown_stage = None
 
         while True:
@@ -167,6 +172,7 @@ def main() -> None:
                 target_missing_since = None
                 distance_error_at_check = None
                 distance_checked_at = None
+                filtered_robot_yaw = None
                 print(f"モード: {'自動' if mode.auto_enabled else '完全手動'}")
 
             # ボールは手動で装填済み。↑を押すとTag14〜22を探して、
@@ -188,6 +194,7 @@ def main() -> None:
                 target_missing_since = None
                 distance_error_at_check = None
                 distance_checked_at = None
+                filtered_robot_yaw = None
                 tag_search_started_at = time.monotonic()
                 stage = "Tag14〜22を探して照準開始待ち"
 
@@ -297,7 +304,15 @@ def main() -> None:
                         distance_error = target.forward_m - AIM_DISTANCE_M[target_row]
                         # カメラで見た角度に、カメラ取付け角の補正を足して
                         # ロボット本体がTagへ真正面を向くための角度にする。
-                        robot_yaw_error = target.yaw_degrees + camera_hensuu.camera_yaw_offset_deg
+                        raw_robot_yaw_error = target.yaw_degrees + camera_hensuu.camera_yaw_offset_deg
+                        if filtered_robot_yaw is None:
+                            filtered_robot_yaw = raw_robot_yaw_error
+                        else:
+                            filtered_robot_yaw = (
+                                (1.0 - AUTO_YAW_FILTER_ALPHA) * filtered_robot_yaw
+                                + AUTO_YAW_FILTER_ALPHA * raw_robot_yaw_error
+                            )
+                        robot_yaw_error = filtered_robot_yaw
                         # 浮動小数やカメラの微小な揺れで永久に回り続けないよう、
                         # サイトと同じ0.1°表示で0.0°になったかを判定する。
                         angle_is_zero = abs(round(robot_yaw_error, 1)) <= TAG_YAW_TOLERANCE_DEG
@@ -310,6 +325,7 @@ def main() -> None:
                             "z誤差[m]": round(distance_error, 3),
                             "カメラTag角度[°]": round(target.yaw_degrees, 2),
                             "カメラ取付け補正[°]": round(camera_hensuu.camera_yaw_offset_deg, 2),
+                            "生ロボット角度誤差[°]": round(raw_robot_yaw_error, 2),
                             "ロボット角度誤差[°]": round(robot_yaw_error, 2),
                             "x到達": abs(position_x) <= AUTO_LATERAL_TOLERANCE_M,
                             "z到達": abs(distance_error) <= DISTANCE_TOLERANCE_M,
@@ -342,6 +358,8 @@ def main() -> None:
                                         robot_yaw_error * TAG_YAW_GAIN * TAG_YAW_DIRECTION,
                                     ),
                                 )
+                                if abs(rotate) < AUTO_ROTATE_MIN_SPEED:
+                                    rotate = AUTO_ROTATE_MIN_SPEED if rotate >= 0.0 else -AUTO_ROTATE_MIN_SPEED
                                 auto = MotionCommand(rotate=rotate)
                                 auto_debug.update({
                                     "判断": "Tag面角度を0°へ旋回中",
