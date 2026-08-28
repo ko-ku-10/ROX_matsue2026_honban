@@ -33,11 +33,13 @@ from rox_mecanum import (
 
 # Tag位置（カメラ座標の右x・前z）を使う照準の速さ・許容範囲。
 # まず画像中心へ旋回してから位置を使うため、魚眼の端の値で横移動しない。
-AUTO_STRAFE_MAX_SPEED = 1.00
+# 自動照準は、手動操作の最大速度(1.00)の半分までに制限する。
+# 暴走を防ぐため、横移動・前後移動ともにここを超えない。
+AUTO_STRAFE_MAX_SPEED = 0.50
 # P制御だけだと中心付近で1〜2%になり、実機では静止摩擦に負けて動かない。
 # 動き出せる最低速度。横移動が強すぎる時は少し下げる。
 AUTO_STRAFE_MIN_SPEED = 0.08
-AUTO_FORWARD_MAX_SPEED = 1.00
+AUTO_FORWARD_MAX_SPEED = 0.50
 CENTER_GAIN = 0.45
 CENTER_TOLERANCE = 0.08
 AUTO_LATERAL_TOLERANCE_M = 0.06
