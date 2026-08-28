@@ -116,6 +116,15 @@ class AprilTagDetector:
     def detect(self, image: object) -> list[TagObservation]:
         corners, ids, _ = self._detector.detectMarkers(image)
         if ids is None:
+            # 逆光・暗い黒枠で検出が落ちる時だけ、コントラストを上げて再試行する。
+            # Tagの一部が画面外へ切れている場合は、補正してもID判定はできない。
+            if len(image.shape) == 3:
+                gray = self._cv2.cvtColor(image, self._cv2.COLOR_BGR2GRAY)
+            else:
+                gray = image
+            enhanced = self._cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(gray)
+            corners, ids, _ = self._detector.detectMarkers(enhanced)
+        if ids is None:
             return []
         height, width = image.shape[:2]
         timestamp = monotonic()

@@ -59,6 +59,8 @@ TAG8_FINAL_FORWARD_DISTANCE_M = 2.0
 # この機体では負の値が「ゲートへ進む」向き。
 TAG8_FORWARD_SPEED = -0.20
 TAG8_FINAL_FORWARD_SEC = 2.0
+# ↑を押してからTag8を待つ最大時間。カメラ・検出スレッドの初回更新も待てるよう長めにする。
+TAG8_SEARCH_TIMEOUT_SEC = 2.0
 
 
 def main() -> None:
@@ -158,8 +160,8 @@ def main() -> None:
                 if camera_error:
                     stage = "自動停止: カメラエラー"
                 else:
-                    # 読取りは別スレッドなので、最大0.5秒だけ応答を待つ。
-                    tag_search_until = loop_started + 0.5
+                    # 読取りは別スレッドなので、初回フレームを待つ時間を確保する。
+                    tag_search_until = loop_started + TAG8_SEARCH_TIMEOUT_SEC
                     stage = "Tag8を検出中"
 
             if mode.auto_enabled:
