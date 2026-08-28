@@ -47,7 +47,7 @@ AUTO_POSITION_ROTATE_MAX_SPEED = 0.20
 AUTO_FORWARD_GAIN = 1.00
 AUTO_STRAFE_GAIN = 1.00
 AUTO_ROTATE_GAIN = 0.10
-AUTO_ROTATE_MAX_SPEED = 1.00
+AUTO_ROTATE_MAX_SPEED = 0.1
 # カメラ角度は1フレームごとに少し揺れるので、過去値と混ぜて滑らかにする。
 AUTO_YAW_FILTER_ALPHA = 0.25
 # 旋回を始める時の最低速度。小さすぎる指令で「ちょこっ」と止まるのを防ぐ。
