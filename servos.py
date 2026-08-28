@@ -126,8 +126,10 @@ class ServoMotors:
         # 応答を落とすことがある。最初に動かし、以後は0.25秒ごとだけ
         # 再送する。モーターは最後の速度指令を保持する仕様を使う。
         next_speed_refresh = 0.0
-        quiet_since: float | None = None
-        previous_position: float | None = None
+        # 1周期(約30ms)だけの変化では低速時に「停止」と誤認する。
+        # stillness_secの間にどれだけ動いたかで、ストッパーを判定する。
+        window_started_at: float | None = None
+        window_started_position: float | None = None
         latest_position: float | None = None
         feedback_samples = 0
 
@@ -153,19 +155,20 @@ class ServoMotors:
 
                 # 新しいmechPos応答が無い周期を「停止」と誤認しない。
                 if received_position and latest_position is not None:
-                    if previous_position is None:
-                        previous_position = latest_position
-                    else:
-                        moved_deg = abs((latest_position - previous_position) * 180.0 / 3.141592653589793)
-                        previous_position = latest_position
+                    if window_started_at is None or window_started_position is None:
+                        window_started_at = now
+                        window_started_position = latest_position
+                    elif now - window_started_at >= stillness_sec:
+                        moved_deg = abs(
+                            (latest_position - window_started_position) * 180.0 / 3.141592653589793
+                        )
                         if moved_deg <= stillness_deg:
-                            quiet_since = now if quiet_since is None else quiet_since
-                            if now - quiet_since >= stillness_sec:
-                                servo.set_home_radians(latest_position)
-                                print(f"{name}原点合わせ完了: ストッパー位置を0度に登録しました")
-                                return
-                        else:
-                            quiet_since = None
+                            servo.set_home_radians(latest_position)
+                            print(f"{name}原点合わせ完了: ストッパー位置を0度に登録しました")
+                            return
+                        # この0.1秒では十分に動いた。新しい区間として測り直す。
+                        window_started_at = now
+                        window_started_position = latest_position
                 # 次のmechPos要求を詰め込みすぎない。
                 time.sleep(0.015)
         finally:
