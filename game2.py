@@ -51,6 +51,9 @@ TAG_SEARCH_SPEED = 0.15
 TAG_SEARCH_TIMEOUT_SEC = 5.0
 # 複数Tagの片方が一瞬見えなくなった時、停止せずその場で再読取りを待つ時間。
 TAG_REACQUIRE_TIMEOUT_SEC = 1.0
+# RDKのTag検出が一時的に遅い時でも、直前の実測を短時間だけ使う。
+# 低速自動走行専用。これ以上古い値では動かない。
+AUTO_TAG_MAX_AGE_SEC = 0.75
 
 LIFT_TIMEOUT_SEC = 8.0
 
@@ -109,6 +112,7 @@ def main() -> None:
         tag_search_started_at = None
         yaw_aligned_since = None
         target_missing_since = None
+        last_auto_report_at = 0.0
         shown_stage = None
 
         while True:
@@ -204,7 +208,7 @@ def main() -> None:
                     choice = choose_panel_target(
                         tags,
                         PANEL_ROWS,
-                        camera_hensuu.tag_max_age_sec,
+                        AUTO_TAG_MAX_AGE_SEC,
                         priority=PANEL_PRIORITY,
                     )
                     if choice is not None and choice.row in AIM_DISTANCE_M:
@@ -223,9 +227,11 @@ def main() -> None:
                 # 「中央に安定して見えていること」を正面判定に使う。
                 # 画面端のTagは探索に使えても、ここでは角度補正に使わない。
                 elif target_row is not None and stage == f"{target_row}段: 正面へ向き合わせ中":
-                    first = tags.get(target_ids[0], camera_hensuu.tag_max_age_sec) if target_ids else None
-                    last = tags.get(target_ids[-1], camera_hensuu.tag_max_age_sec) if target_ids else None
-                    target = first if target_ids and len(target_ids) == 1 else midpoint(first, last) if first and last else None
+                    first = tags.get(target_ids[0], AUTO_TAG_MAX_AGE_SEC) if target_ids else None
+                    last = tags.get(target_ids[-1], AUTO_TAG_MAX_AGE_SEC) if target_ids else None
+                    # 2枚見えている間は中間を狙う。片方が一瞬欠けても、残った
+                    # 1枚で向き・距離合わせを継続して無意味な停止を避ける。
+                    target = first if target_ids and len(target_ids) == 1 else midpoint(first, last) if first and last else first or last
                     if target is None:
                         if target_missing_since is None:
                             target_missing_since = loop_started
@@ -256,9 +262,9 @@ def main() -> None:
                 # 段別に設定した距離へ前後だけで合わせる。
                 # 横ずれは次の段階でだけ補正するため、狙いを横に動かさない。
                 elif target_row is not None and stage == f"{target_row}段: 指定距離へ前進中":
-                    first = tags.get(target_ids[0], camera_hensuu.tag_max_age_sec) if target_ids else None
-                    last = tags.get(target_ids[-1], camera_hensuu.tag_max_age_sec) if target_ids else None
-                    target = first if target_ids and len(target_ids) == 1 else midpoint(first, last) if first and last else None
+                    first = tags.get(target_ids[0], AUTO_TAG_MAX_AGE_SEC) if target_ids else None
+                    last = tags.get(target_ids[-1], AUTO_TAG_MAX_AGE_SEC) if target_ids else None
+                    target = first if target_ids and len(target_ids) == 1 else midpoint(first, last) if first and last else first or last
                     distance = AIM_DISTANCE_M.get(target_row)
                     if target is None:
                         if target_missing_since is None:
@@ -288,14 +294,20 @@ def main() -> None:
                             auto = MotionCommand(
                                 forward=max(-AUTO_SPEED, min(AUTO_SPEED, (target.distance_m - distance) * CENTER_GAIN)),
                             )
+                            if loop_started - last_auto_report_at >= 0.5:
+                                print(
+                                    f"[auto] {target_row}段 距離={target.distance_m:.2f}m "
+                                    f"目標={distance:.2f}m 前後指令={auto.forward:+.2f}"
+                                )
+                                last_auto_report_at = loop_started
                             if abs(target.distance_m - distance) <= DISTANCE_TOLERANCE_M:
                                 stage = "横スライド照準中"
 
                 # 前後移動を止め、横だけで中心に合わせる。
                 elif stage == "横スライド照準中":
-                    first = tags.get(target_ids[0], camera_hensuu.tag_max_age_sec) if target_ids else None
-                    last = tags.get(target_ids[-1], camera_hensuu.tag_max_age_sec) if target_ids else None
-                    target = first if target_ids and len(target_ids) == 1 else midpoint(first, last) if first and last else None
+                    first = tags.get(target_ids[0], AUTO_TAG_MAX_AGE_SEC) if target_ids else None
+                    last = tags.get(target_ids[-1], AUTO_TAG_MAX_AGE_SEC) if target_ids else None
+                    target = first if target_ids and len(target_ids) == 1 else midpoint(first, last) if first and last else first or last
                     if target is None:
                         if target_missing_since is None:
                             target_missing_since = loop_started
