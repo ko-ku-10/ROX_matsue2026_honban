@@ -15,7 +15,7 @@ from typing import Iterable
 
 @dataclass(frozen=True)
 class TagObservation:
-    """1枚のAprilTagの最新観測値。距離はカメラからのm単位。"""
+    """1枚のAprilTagの最新観測値。位置はカメラから見たm単位。"""
 
     tag_id: int
     center_x: float
@@ -27,6 +27,10 @@ class TagObservation:
     # Tag平面のカメラに対する左右の傾き。正面なら0°。
     # 魚眼補正なしでは近似値のため、安全な正面合わせ用にだけ使う。
     yaw_degrees: float | None = None
+    # solvePnPで求めたカメラ座標。右が正の左右位置と、正面方向の距離。
+    # 昔のRDKカメラプログラムの tvec[0] / tvec[2] と同じ値である。
+    lateral_m: float | None = None
+    forward_m: float | None = None
 
     @property
     def horizontal_error(self) -> float:
@@ -50,6 +54,19 @@ def robot_center_horizontal_error(
     安全に従来どおり画像中心基準の値を返す。
     """
     error = target.horizontal_error
+    # 旧プログラムと同じsolvePnPの実測x/zがあれば、画像上の中心より優先する。
+    # カメラがロボット中心より右にある場合、ロボット正面のTagは camera x が負になる。
+    if (
+        target.lateral_m is not None
+        and target.forward_m is not None
+        and target.forward_m > 0.0
+        and focal_length_px > 0.0
+        and target.image_width > 0
+    ):
+        half_width = target.image_width / 2.0
+        return ((target.lateral_m + float(camera_lateral_offset_m)) * float(focal_length_px)) / (
+            target.forward_m * half_width
+        )
     if (
         target.distance_m is None
         or target.distance_m <= 0.0
@@ -138,17 +155,26 @@ class AprilTagDetector:
                 a, b = points[index], points[(index + 1) % 4]
                 edge_lengths.append(float(((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2) ** 0.5))
             pixel_size = sum(edge_lengths) / len(edge_lengths)
-            distance = None
-            if self.focal_length_px > 0.0 and pixel_size > 0.0:
+            lateral, forward, yaw = self._tag_pose(points, width, height)
+            # z（カメラ正面方向の距離）を最優先する。solvePnPが失敗した時だけ、
+            # 従来のTag辺長からの距離推定を安全な代替値として使う。
+            distance = forward
+            if distance is None and self.focal_length_px > 0.0 and pixel_size > 0.0:
                 distance = self.tag_size_m * self.focal_length_px / pixel_size
-            yaw = self._tag_yaw_degrees(points, width, height)
-            result.append(TagObservation(int(raw_id), center_x, center_y, int(width), distance, timestamp, pixel_size, yaw))
+            result.append(
+                TagObservation(
+                    int(raw_id), center_x, center_y, int(width), distance, timestamp,
+                    pixel_size, yaw, lateral, forward,
+                )
+            )
         return result
 
-    def _tag_yaw_degrees(self, image_points: object, width: int, height: int) -> float | None:
-        """Tagの4隅から、Tag面がカメラ正面に対して傾いた角度を推定する。"""
+    def _tag_pose(
+        self, image_points: object, width: int, height: int,
+    ) -> tuple[float | None, float | None, float | None]:
+        """旧RDKプログラムと同じsolvePnPでTagの x / z / yaw を求める。"""
         if self.focal_length_px <= 0.0 or width <= 0 or height <= 0:
-            return None
+            return None, None, None
         half = self.tag_size_m / 2.0
         object_points = self._np.array([
             [-half, half, 0.0], [half, half, 0.0],
@@ -160,23 +186,30 @@ class AprilTagDetector:
             [0.0, 0.0, 1.0],
         ], dtype=self._np.float64)
         try:
-            solved, rotation_vector, _ = self._cv2.solvePnP(
+            solved, rotation_vector, translation = self._cv2.solvePnP(
                 object_points,
                 self._np.asarray(image_points, dtype=self._np.float32),
                 camera_matrix,
                 self._np.zeros((4, 1), dtype=self._np.float64),
-                flags=getattr(self._cv2, "SOLVEPNP_IPPE_SQUARE", self._cv2.SOLVEPNP_ITERATIVE),
+                # 旧プログラムと同じ方式。RDK実機で確認できている挙動を優先する。
+                flags=self._cv2.SOLVEPNP_ITERATIVE,
             )
             if not solved:
-                return None
+                return None, None, None
+            # solvePnPが返すtvecは、カメラ座標の [右x, 下y, 前z] [m]。
+            # ここではゲームで使う x / z だけを保存する。
             rotation, _ = self._cv2.Rodrigues(rotation_vector)
             normal = rotation[:, 2]
             # Tagの表裏定義によらず、カメラ側を向く法線で計算する。
             if normal[2] < 0.0:
                 normal = -normal
-            return degrees(atan2(float(normal[0]), float(normal[2])))
+            return (
+                float(translation[0][0]),
+                float(translation[2][0]),
+                degrees(atan2(float(normal[0]), float(normal[2]))),
+            )
         except self._cv2.error:
-            return None
+            return None, None, None
 
 
 class OpenCVStereoCamera:
@@ -388,4 +421,6 @@ def midpoint(first: TagObservation, second: TagObservation) -> TagObservation:
         timestamp=min(first.timestamp, second.timestamp),
         pixel_size=(first.pixel_size + second.pixel_size) / 2.0 if first.pixel_size is not None and second.pixel_size is not None else None,
         yaw_degrees=(first.yaw_degrees + second.yaw_degrees) / 2.0 if first.yaw_degrees is not None and second.yaw_degrees is not None else None,
+        lateral_m=(first.lateral_m + second.lateral_m) / 2.0 if first.lateral_m is not None and second.lateral_m is not None else None,
+        forward_m=(first.forward_m + second.forward_m) / 2.0 if first.forward_m is not None and second.forward_m is not None else None,
     )

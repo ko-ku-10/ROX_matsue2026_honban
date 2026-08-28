@@ -11,6 +11,13 @@ def test_touchpad_switches_mode_only_on_press() -> None:
     assert not mode.update(ControllerState())
 
 
+def test_explicit_auto_start_switches_only_to_auto() -> None:
+    mode = ModeController()
+    assert mode.enable_auto()
+    assert mode.mode is ControlMode.AUTO
+    assert not mode.enable_auto()
+
+
 def test_manual_mode_ignores_auto_but_auto_mode_adds_it() -> None:
     auto = MotionCommand(forward=0.4, strafe=0.2)
     manual = MotionCommand(forward=-0.1, rotate=0.3)
@@ -51,4 +58,15 @@ def test_camera_lateral_offset_corrects_for_robot_center() -> None:
     # カメラが右へ20cm、Tagまで2m、焦点距離500pxの場合、ロボット正面のTagは
     # 画像中心より50px（正規化で-0.1）左に見える。補正後は0になる。
     target = TagObservation(8, 450, 200, 1000, 2.0, 1.0)
+    assert robot_center_horizontal_error(target, camera_lateral_offset_m=0.2, focal_length_px=500.0) == 0.0
+
+
+def test_solvepnp_x_z_is_used_for_robot_center_error() -> None:
+    # 旧カメラ方式の tvec: camera右へ-20cm、前方2m。
+    # カメラがロボット中心より右へ20cmなら、ロボット中心からは真正面になる。
+    target = TagObservation(
+        8, 450, 200, 1000, 2.0, 1.0,
+        lateral_m=-0.2,
+        forward_m=2.0,
+    )
     assert robot_center_horizontal_error(target, camera_lateral_offset_m=0.2, focal_length_px=500.0) == 0.0

@@ -89,6 +89,8 @@ class GameStatusSite:
                         focal_length_px=camera_focal_length_px,
                     ), 3),
                     "distance_m": None if item.distance_m is None else round(item.distance_m, 3),
+                    "lateral_m": None if item.lateral_m is None else round(item.lateral_m, 3),
+                    "forward_m": None if item.forward_m is None else round(item.forward_m, 3),
                     "yaw_degrees": None if item.yaw_degrees is None else round(item.yaw_degrees, 2),
                 }
         self.site.set_status(
