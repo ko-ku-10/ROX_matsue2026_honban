@@ -295,6 +295,9 @@ def main() -> None:
                         target_missing_since = None
                         position_x = target.lateral_m + camera_hensuu.camera_lateral_offset_m
                         distance_error = target.forward_m - AIM_DISTANCE_M[target_row]
+                        # カメラで見た角度に、カメラ取付け角の補正を足して
+                        # ロボット本体がTagへ真正面を向くための角度にする。
+                        robot_yaw_error = target.yaw_degrees + camera_hensuu.camera_yaw_offset_deg
                         auto_debug.update({
                             "Tag 18 x[m]": round(position_x, 3),
                             "Tag 18 z[m]": round(target.forward_m, 3),
@@ -302,20 +305,23 @@ def main() -> None:
                             "目標 z[m]": round(AIM_DISTANCE_M[target_row], 3),
                             "x誤差[m]": round(position_x, 3),
                             "z誤差[m]": round(distance_error, 3),
-                            "Tag面角度[°]": round(target.yaw_degrees, 2),
+                            "カメラTag角度[°]": round(target.yaw_degrees, 2),
+                            "カメラ取付け補正[°]": round(camera_hensuu.camera_yaw_offset_deg, 2),
+                            "ロボット角度誤差[°]": round(robot_yaw_error, 2),
                             "x到達": abs(position_x) <= AUTO_LATERAL_TOLERANCE_M,
                             "z到達": abs(distance_error) <= DISTANCE_TOLERANCE_M,
-                            "角度到達": abs(target.yaw_degrees) <= TAG_YAW_TOLERANCE_DEG,
+                            "角度到達": abs(robot_yaw_error) <= TAG_YAW_TOLERANCE_DEG,
                         })
                         if loop_started - last_position_report_at >= 0.5:
                             print(
                                 f"Tag {target.tag_id} 位置: x={position_x:+.3f}m "
                                 f"z={target.forward_m:.3f}m "
+                                f"yaw={robot_yaw_error:+.2f}° "
                                 f"目標z={AIM_DISTANCE_M[target_row]:.3f}m"
                             )
                             last_position_report_at = loop_started
                         if (
-                            abs(target.yaw_degrees) <= TAG_YAW_TOLERANCE_DEG
+                            abs(robot_yaw_error) <= TAG_YAW_TOLERANCE_DEG
                             and abs(position_x) <= AUTO_LATERAL_TOLERANCE_M
                             and abs(distance_error) <= DISTANCE_TOLERANCE_M
                         ):
@@ -323,14 +329,14 @@ def main() -> None:
                             auto_debug["判断"] = "角度・x・zがすべて許容範囲内。照準完了"
                         else:
                             # 最初にTag面の角度だけを0°へ合わせる。
-                            if abs(target.yaw_degrees) > TAG_YAW_TOLERANCE_DEG:
+                            if abs(robot_yaw_error) > TAG_YAW_TOLERANCE_DEG:
                                 distance_checked_at = None
                                 distance_error_at_check = None
                                 rotate = max(
                                     -TAG_ROTATE_MAX_SPEED,
                                     min(
                                         TAG_ROTATE_MAX_SPEED,
-                                        target.yaw_degrees * TAG_YAW_GAIN * TAG_YAW_DIRECTION,
+                                        robot_yaw_error * TAG_YAW_GAIN * TAG_YAW_DIRECTION,
                                     ),
                                 )
                                 auto = MotionCommand(rotate=rotate)

@@ -26,6 +26,11 @@ tag_max_age_sec = 0.35
 # Tagの距離に応じて画像上の中心位置を補正し、ロボット中心がTagへ向くようにする。
 camera_lateral_offset_m = 0.0
 
+# カメラがロボットの真正面からどれだけ回転して付いているか[度]。
+# ロボットをTagへ真正面に置いた時に、サイトの「Tag角度」が +3.0°なら、
+# ここへ -3.0 を入れる。補正後の角度0°をロボット真正面として扱う。
+camera_yaw_offset_deg = 0.0
+
 # ==================================================
 # Tagを正面から見るための共通設定（GAME1・GAME2共通）
 # ==================================================
@@ -39,7 +44,7 @@ tag_rotate_gain = 0.60
 tag_rotate_max_speed = 0.20
 tag_center_stable_sec = 0.30
 # Tag面がロボット正面と平行とみなす角度。
-tag_yaw_tolerance_deg = 4.0
+tag_yaw_tolerance_deg = 1.0
 tag_yaw_gain = 0.020
 # 実機で角度合わせだけが逆回転なら -1.0 に変える。
 tag_yaw_direction = 1.0
