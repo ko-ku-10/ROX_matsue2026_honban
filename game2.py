@@ -57,6 +57,8 @@ AUTO_ROTATE_MIN_SPEED = 0.06
 DISTANCE_TOLERANCE_M = 0.08
 # 自動で前後へ動く向き。前後が逆なら -1.0 に変える。
 AUTO_FORWARD_DIRECTION = -1.0
+# 横移動の向き。横が逆なら -1.0 に変える。
+AUTO_STRAFE_DIRECTION = 1.0
 # 前後移動中に距離誤差が改善しているか確認する間隔と最小改善量。
 # 向き・距離計算が逆でも、走り続けないための安全停止である。
 AUTO_FORWARD_PROGRESS_SEC = 0.70
@@ -141,6 +143,8 @@ def main() -> None:
         target_missing_since = None
         distance_error_at_check = None
         distance_checked_at = None
+        lateral_error_at_check = None
+        lateral_checked_at = None
         last_position_report_at = 0.0
         filtered_robot_yaw = None
         shown_stage = None
@@ -178,6 +182,8 @@ def main() -> None:
                 target_missing_since = None
                 distance_error_at_check = None
                 distance_checked_at = None
+                lateral_error_at_check = None
+                lateral_checked_at = None
                 filtered_robot_yaw = None
                 print(f"モード: {'自動' if mode.auto_enabled else '完全手動'}")
 
@@ -200,6 +206,8 @@ def main() -> None:
                 target_missing_since = None
                 distance_error_at_check = None
                 distance_checked_at = None
+                lateral_error_at_check = None
+                lateral_checked_at = None
                 filtered_robot_yaw = None
                 tag_search_started_at = time.monotonic()
                 stage = "Tag14〜22を探して照準開始待ち"
@@ -272,6 +280,8 @@ def main() -> None:
                         target_missing_since = None
                         distance_error_at_check = None
                         distance_checked_at = None
+                        lateral_error_at_check = None
+                        lateral_checked_at = None
                         print(
                             f"Tag {', '.join(str(item) for item in target_ids)}を選択: 位置x=0m・"
                             f"{AIM_DISTANCE_M[target_row]:.2f}mまで近づきます"
@@ -360,22 +370,41 @@ def main() -> None:
                             if abs(position_x) > AUTO_LATERAL_TOLERANCE_M:
                                 distance_checked_at = None
                                 distance_error_at_check = None
+                                # 横移動でも、x誤差が縮まらなければ止める。
+                                # 向きが逆・Pose異常の時に走り続けないための安全処理。
+                                if lateral_checked_at is None:
+                                    lateral_checked_at = loop_started
+                                    lateral_error_at_check = abs(position_x)
+                                elif loop_started - lateral_checked_at >= AUTO_FORWARD_PROGRESS_SEC:
+                                    lateral_progress = lateral_error_at_check - abs(position_x)
+                                    if lateral_progress < AUTO_FORWARD_MIN_PROGRESS_M:
+                                        stage = "自動停止: 標的Tagへの横位置xが改善しない"
+                                        auto_debug["判断"] = "0.7秒間、横位置xが改善しないため停止"
+                                    else:
+                                        lateral_checked_at = loop_started
+                                        lateral_error_at_check = abs(position_x)
                                 strafe = max(
                                     -AUTO_STRAFE_MAX_SPEED,
-                                    min(AUTO_STRAFE_MAX_SPEED, position_x * AUTO_STRAFE_GAIN),
+                                    min(
+                                        AUTO_STRAFE_MAX_SPEED,
+                                        position_x * AUTO_STRAFE_GAIN * AUTO_STRAFE_DIRECTION,
+                                    ),
                                 )
                                 if abs(strafe) < AUTO_STRAFE_MIN_SPEED:
                                     strafe = AUTO_STRAFE_MIN_SPEED if strafe >= 0.0 else -AUTO_STRAFE_MIN_SPEED
-                                auto = MotionCommand(strafe=strafe)
-                                auto_debug.update({
-                                    "判断": "1/3: x=0mへ横スライド中",
-                                    "自動 前後": 0.0,
-                                    "自動 横": round(strafe, 3),
-                                    "自動 旋回": 0.0,
-                                })
+                                if not stage.startswith("自動停止:"):
+                                    auto = MotionCommand(strafe=strafe)
+                                    auto_debug.update({
+                                        "判断": "1/3: x=0mへ横スライド中",
+                                        "自動 前後": 0.0,
+                                        "自動 横": round(strafe, 3),
+                                        "自動 旋回": 0.0,
+                                    })
 
                             # 2. 横位置が合ったら、前後だけで設定距離zへ移動する。
                             elif abs(distance_error) > DISTANCE_TOLERANCE_M:
+                                lateral_checked_at = None
+                                lateral_error_at_check = None
                                 position_error_size = abs(distance_error)
                                 if distance_checked_at is None:
                                     distance_checked_at = loop_started
