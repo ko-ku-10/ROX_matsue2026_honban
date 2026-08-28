@@ -34,6 +34,9 @@ from rox_mecanum import (
 
 # Tagを中心へ寄せるときの速さ・許容範囲。
 AUTO_STRAFE_MAX_SPEED = 0.20
+# P制御だけだと中心付近で1〜2%になり、実機では静止摩擦に負けて動かない。
+# 動き出せる最低速度。横移動が強すぎる時は少し下げる。
+AUTO_STRAFE_MIN_SPEED = 0.08
 AUTO_FORWARD_MAX_SPEED = 0.20
 CENTER_GAIN = 0.45
 CENTER_TOLERANCE = 0.08
@@ -247,11 +250,15 @@ def main() -> None:
                             focal_length_px=camera_hensuu.camera_focal_length_px,
                         )
                         if abs(horizontal_error) > TAG_CENTER_TOLERANCE:
+                            strafe_speed = max(
+                                -AUTO_STRAFE_MAX_SPEED,
+                                min(AUTO_STRAFE_MAX_SPEED, horizontal_error * CENTER_GAIN),
+                            )
+                            # 中心に近くても、止まったままにならない最低横速度を出す。
+                            if abs(strafe_speed) < AUTO_STRAFE_MIN_SPEED:
+                                strafe_speed = AUTO_STRAFE_MIN_SPEED if strafe_speed >= 0.0 else -AUTO_STRAFE_MIN_SPEED
                             auto = MotionCommand(
-                                strafe=max(
-                                    -AUTO_STRAFE_MAX_SPEED,
-                                    min(AUTO_STRAFE_MAX_SPEED, horizontal_error * CENTER_GAIN),
-                                ),
+                                strafe=strafe_speed,
                             )
                         else:
                             yaw_aligned_since = None
