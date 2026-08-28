@@ -110,3 +110,7 @@ servo_feedback_timeout_sec = 0.25
 
 # 状態表示サイト: http://ロボットのIPアドレス:8000
 dashboard_port = 8000
+# 状態表示サイトの映像更新回数。小さいほど走行操作への負荷が減る。
+dashboard_camera_hz = 3.0
+# 自動中にAprilTagを読み取る回数。10Hzなら0.1秒ごとに位置を更新する。
+dashboard_tag_hz = 10.0

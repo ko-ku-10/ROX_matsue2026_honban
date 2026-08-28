@@ -17,7 +17,7 @@ class GameStatusSite:
     入力・サーボ・カメラの状態を、ブラウザ表示用にまとめるだけである。
     """
 
-    def __init__(self, game_name: str, port: int, camera_hz: float = 10.0) -> None:
+    def __init__(self, game_name: str, port: int, camera_hz: float = 3.0) -> None:
         if camera_hz <= 0.0:
             raise ValueError("camera_hz は0より大きくしてください")
         self.game_name = str(game_name)

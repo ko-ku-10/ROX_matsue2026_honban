@@ -77,7 +77,7 @@ def main() -> None:
         detector = AprilTagDetector(camera_hensuu.apriltag_size_m, camera_hensuu.camera_focal_length_px)
         tags = TagStore()
         mode = ModeController()
-        status_site = GameStatusSite("GAME2", hensuu.dashboard_port)
+        status_site = GameStatusSite("GAME2", hensuu.dashboard_port, hensuu.dashboard_camera_hz)
         print(f"状態監視サイト: {status_site.url()}")
 
         stage = "補給待ち: CREATEで照準開始"
@@ -85,21 +85,27 @@ def main() -> None:
         target_row = None
         lift_action = None
         shown_stage = None
+        next_tag_read_at = 0.0
 
         while True:
             loop_started = time.monotonic()
             state = runtime.controller.read()
 
-            # カメラが失敗した場合、今の自動動作は止める。
-            try:
-                image = camera.read()
-                observations = detector.detect(image)
-                tags.update(observations)
-                if status_site.camera_due(loop_started):
-                    status_site.set_camera_frame(image, observations)
-                camera_error = ""
-            except Exception as error:
-                camera_error = str(error)
+            # 自動照準に必要なTag検出だけ10Hzで行う。手動中は映像だけを低頻度で送る。
+            dashboard_camera_due = status_site.camera_due(loop_started)
+            tag_read_due = mode.auto_enabled and loop_started >= next_tag_read_at
+            camera_error = ""
+            if tag_read_due or dashboard_camera_due:
+                try:
+                    image = camera.read()
+                    observations = detector.detect(image) if tag_read_due else []
+                    if tag_read_due:
+                        tags.update(observations)
+                        next_tag_read_at = loop_started + 1.0 / hensuu.dashboard_tag_hz
+                    if dashboard_camera_due:
+                        status_site.set_camera_frame(image, observations)
+                except Exception as error:
+                    camera_error = str(error)
 
             # OPTIONSは最優先。すべて停止して終了する。
             if state.was_pressed(Button.OPTIONS):

@@ -12,7 +12,7 @@ from enum import Enum
 import camera_hensuu
 import hensuu
 import robot_actions
-from rox_mecanum import AprilTagDetector, Button, GameStatusSite, MotionCommand, RobotRuntime, TagStore, open_camera
+from rox_mecanum import Button, GameStatusSite, MotionCommand, RobotRuntime, TagStore, open_camera
 
 
 # スティックの微妙なずれを無視する範囲。勝手に走るなら少し上げる。
@@ -42,7 +42,7 @@ def main() -> None:
     try:
         runtime = RobotRuntime.open()
         robot_actions.setup_gpio()
-        status_site = GameStatusSite("GAME3", hensuu.dashboard_port)
+        status_site = GameStatusSite("GAME3", hensuu.dashboard_port, hensuu.dashboard_camera_hz)
         print(f"状態監視サイト: {status_site.url()}")
         tags = TagStore()
         camera_error = ""
@@ -57,10 +57,8 @@ def main() -> None:
                 width=camera_hensuu.mipi_width,
                 height=camera_hensuu.mipi_height,
             )
-            detector = AprilTagDetector(camera_hensuu.apriltag_size_m, camera_hensuu.camera_focal_length_px)
         except Exception as error:
             camera = None
-            detector = None
             camera_error = str(error)
 
         stage = Stage.WAIT
@@ -71,13 +69,11 @@ def main() -> None:
             loop_started = time.monotonic()
             state = runtime.controller.read()
 
-            # 監視用のカメラ・Tag処理は10Hzだけ。走行操作の周期を下げない。
-            if camera is not None and detector is not None and status_site.camera_due(loop_started):
+            # GAME3はTagを使わない。カメラ映像だけを低頻度でサイトへ渡す。
+            if camera is not None and status_site.camera_due(loop_started):
                 try:
                     image = camera.read()
-                    observations = detector.detect(image)
-                    tags.update(observations)
-                    status_site.set_camera_frame(image, observations)
+                    status_site.set_camera_frame(image, [])
                     camera_error = ""
                 except Exception as error:
                     camera_error = str(error)

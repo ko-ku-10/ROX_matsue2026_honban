@@ -71,11 +71,12 @@ def main() -> None:
         detector = AprilTagDetector(camera_hensuu.apriltag_size_m, camera_hensuu.camera_focal_length_px)
         tags = TagStore()
         mode = ModeController()
-        status_site = GameStatusSite("GAME1", hensuu.dashboard_port)
+        status_site = GameStatusSite("GAME1", hensuu.dashboard_port, hensuu.dashboard_camera_hz)
         print(f"状態監視サイト: {status_site.url()}")
 
         stage = "手動走行"
         forward_until = 0.0
+        next_tag_read_at = 0.0
         shown_stage = None
 
         while True:
@@ -100,14 +101,19 @@ def main() -> None:
             # スティック操作のラグを防ぐ。↑を押した時と中心合わせ中だけ読む。
             start_gate = mode.auto_enabled and state.was_pressed(Button.DPAD_UP)
             needs_tag_frame = start_gate or stage == "Tag8を画面中央へ合わせ中"
-            # 手動時もサイトの映像を見られるよう10Hzでカメラを更新する。
+            # 手動時は軽い映像表示だけにし、重いTag検出は自動中だけ10Hzに制限する。
             dashboard_camera_due = status_site.camera_due(loop_started)
+            tag_read_due = start_gate or (
+                needs_tag_frame and loop_started >= next_tag_read_at
+            )
             camera_error = ""
-            if needs_tag_frame or dashboard_camera_due:
+            if tag_read_due or dashboard_camera_due:
                 try:
                     image = camera.read()
-                    observations = detector.detect(image)
-                    tags.update(observations)
+                    observations = detector.detect(image) if tag_read_due else []
+                    if tag_read_due:
+                        tags.update(observations)
+                        next_tag_read_at = loop_started + 1.0 / hensuu.dashboard_tag_hz
                     if dashboard_camera_due:
                         status_site.set_camera_frame(image, observations)
                 except Exception as error:
