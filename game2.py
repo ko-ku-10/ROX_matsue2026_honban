@@ -71,6 +71,10 @@ PANEL_ROWS = {
 }
 PANEL_PRIORITY = ("top", "middle", "bottom")
 
+# 照準の実機テスト中は、狙うTagを1枚だけに固定する。
+# 18番の確認が終わったら ``None`` に戻すと、上→中→下の自動選択へ戻る。
+TEST_FIXED_TAG_ID = 18
+
 # 段ごとの発射距離[m]。中段・上段・下段で当たりやすい距離を、
 # それぞれ実射して入力する。距離はカメラレンズからTag面まで。
 AIM_DISTANCE_M = {
@@ -208,24 +212,34 @@ def main() -> None:
                     stage = "完全手動: 持上げ完了"
 
             if mode.auto_enabled and not camera_error:
-                # Tagを探して上→中央→下の順で段を選ぶ。
+                # 照準テスト中はTag 18だけを使う。Noneなら上→中央→下で選ぶ。
                 if stage == "Tag14〜22を探して照準開始待ち":
-                    choice = choose_panel_target(
-                        tags,
-                        PANEL_ROWS,
-                        AUTO_TAG_MAX_AGE_SEC,
-                        priority=PANEL_PRIORITY,
-                    )
-                    if choice is not None and choice.row in AIM_DISTANCE_M:
-                        target_ids = choice.tag_ids
-                        target_row = choice.row
+                    if TEST_FIXED_TAG_ID is not None:
+                        fixed_target = tags.get(TEST_FIXED_TAG_ID, AUTO_TAG_MAX_AGE_SEC)
+                        if fixed_target is not None:
+                            target_ids = (TEST_FIXED_TAG_ID,)
+                            target_row = "middle"
+                        else:
+                            target_ids = None
+                            target_row = None
+                    else:
+                        choice = choose_panel_target(
+                            tags,
+                            PANEL_ROWS,
+                            AUTO_TAG_MAX_AGE_SEC,
+                            priority=PANEL_PRIORITY,
+                        )
+                        target_ids = choice.tag_ids if choice is not None else None
+                        target_row = choice.row if choice is not None else None
+
+                    if target_ids is not None and target_row in AIM_DISTANCE_M:
                         yaw_aligned_since = None
                         target_missing_since = None
                         print(
-                            f"{choice.row}段を選択: 横中心→垂直旋回→"
-                            f"{AIM_DISTANCE_M[choice.row]:.2f}mまで近づきます"
+                            f"Tag {target_ids[0]}を選択: 横中心→垂直旋回→"
+                            f"{AIM_DISTANCE_M[target_row]:.2f}mまで近づきます"
                         )
-                        stage = f"{choice.row}段: 横スライドで中心合わせ中"
+                        stage = f"{target_row}段: 横スライドで中心合わせ中"
                     elif tag_search_started_at is None or time.monotonic() - tag_search_started_at >= TAG_SEARCH_TIMEOUT_SEC:
                         stage = "自動停止: Tag14〜22を見つけられない"
 
