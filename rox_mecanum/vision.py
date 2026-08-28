@@ -191,8 +191,9 @@ class AprilTagDetector:
                 self._np.asarray(image_points, dtype=self._np.float32),
                 camera_matrix,
                 self._np.zeros((4, 1), dtype=self._np.float64),
-                # 旧プログラムと同じ方式。RDK実機で確認できている挙動を優先する。
-                flags=self._cv2.SOLVEPNP_ITERATIVE,
+                # OpenCVが四角い平面マーカー用に用意している方式を使う。
+                # ArUco / AprilTagの4頂点順と object_points の順を一致させている。
+                flags=getattr(self._cv2, "SOLVEPNP_IPPE_SQUARE", self._cv2.SOLVEPNP_ITERATIVE),
             )
             if not solved:
                 return None, None, None
