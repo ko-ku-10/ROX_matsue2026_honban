@@ -79,7 +79,7 @@ def main() -> None:
             # GAME3はTagを使わない。映像表示は別スレッドで行う。
             if vision_worker is not None:
                 vision_worker.set_paused(
-                    state.left_stick.magnitude > 0.05 or state.right_stick.magnitude > 0.05
+                    state.left_stick.magnitude > 0.25 or state.right_stick.magnitude > 0.25
                 )
                 camera_error = vision_worker.error
 

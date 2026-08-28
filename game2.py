@@ -99,7 +99,8 @@ def main() -> None:
 
             # カメラ・Tag処理は別スレッド。手動中は映像表示だけにする。
             vision_worker.set_paused(
-                state.left_stick.magnitude > 0.05 or state.right_stick.magnitude > 0.05
+                not mode.auto_enabled
+                and (state.left_stick.magnitude > 0.25 or state.right_stick.magnitude > 0.25)
             )
             vision_worker.set_tag_detection_enabled(mode.auto_enabled)
             camera_error = vision_worker.error

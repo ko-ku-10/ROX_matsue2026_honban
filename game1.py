@@ -135,8 +135,11 @@ def main() -> None:
                 "Tag8正面の1.0m地点へ移動中",
             }
             # カメラ処理は別スレッド。ここでは有効化だけ行い、操縦入力は待たない。
+            # Tag8自動中は、スティックの微小なズレで検出を止めない。
+            # それ以外の手動走行中だけ、強く倒した時にサイト映像を休止する。
             vision_worker.set_paused(
-                state.left_stick.magnitude > 0.05 or state.right_stick.magnitude > 0.05
+                not needs_tag_frame
+                and (state.left_stick.magnitude > 0.25 or state.right_stick.magnitude > 0.25)
             )
             vision_worker.set_tag_detection_enabled(needs_tag_frame)
             if start_gate:
@@ -172,7 +175,9 @@ def main() -> None:
                     elif tag8 is not None:
                         stage = "Tag8を画面中央へ合わせ中"
                     elif loop_started >= tag_search_until:
-                        stage = "自動停止: Tag8が見えない"
+                        found_ids = sorted(tags.snapshot())
+                        found_text = ", ".join(str(tag_id) for tag_id in found_ids) or "なし"
+                        stage = f"自動停止: Tag8が見えない (検出ID: {found_text})"
 
                 elif stage == "Tag8を画面中央へ合わせ中":
                     tag8 = tags.get(TAG_GATE, camera_hensuu.tag_max_age_sec)
