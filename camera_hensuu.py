@@ -17,7 +17,7 @@ mipi_fps = 30
 mipi_width = 1920
 mipi_height = 1080
 apriltag_size_m = 0.180
-camera_focal_length_px = 729.30
+camera_focal_length_px = 619
 tag_max_age_sec = 0.35
 
 # カメラ中心がロボット中心から横にずれている量[m]。
