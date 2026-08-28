@@ -49,6 +49,8 @@ TAG_ROTATE_MAX_SPEED = camera_hensuu.tag_rotate_max_speed
 # 見つからないまま走り続けないよう、最大時間を必ず決めておく。
 TAG_SEARCH_SPEED = 0.15
 TAG_SEARCH_TIMEOUT_SEC = 5.0
+# 複数Tagの片方が一瞬見えなくなった時、停止せずその場で再読取りを待つ時間。
+TAG_REACQUIRE_TIMEOUT_SEC = 1.0
 
 LIFT_TIMEOUT_SEC = 8.0
 
@@ -106,6 +108,7 @@ def main() -> None:
         lift_action = None
         tag_search_started_at = None
         yaw_aligned_since = None
+        target_missing_since = None
         shown_stage = None
 
         while True:
@@ -138,6 +141,7 @@ def main() -> None:
                 target_row = None
                 tag_search_started_at = None
                 yaw_aligned_since = None
+                target_missing_since = None
                 print(f"モード: {'自動' if mode.auto_enabled else '完全手動'}")
 
             # ボールは手動で装填済み。↑を押したら、機構の到達待ちをせず
@@ -156,6 +160,7 @@ def main() -> None:
                 target_ids = None
                 target_row = None
                 yaw_aligned_since = None
+                target_missing_since = None
                 tag_search_started_at = time.monotonic()
                 stage = "Tag14〜22を探索しながら前進中"
 
@@ -206,6 +211,7 @@ def main() -> None:
                         target_ids = choice.tag_ids
                         target_row = choice.row
                         yaw_aligned_since = None
+                        target_missing_since = None
                         stage = f"{choice.row}段: 正面へ向き合わせ中"
                     elif tag_search_started_at is None or time.monotonic() - tag_search_started_at >= TAG_SEARCH_TIMEOUT_SEC:
                         stage = "自動停止: Tag14〜22を見つけられない"
@@ -221,8 +227,13 @@ def main() -> None:
                     last = tags.get(target_ids[-1], camera_hensuu.tag_max_age_sec) if target_ids else None
                     target = first if target_ids and len(target_ids) == 1 else midpoint(first, last) if first and last else None
                     if target is None:
-                        stage = "自動停止: 標的Tagを見失った"
+                        if target_missing_since is None:
+                            target_missing_since = loop_started
+                        vision_worker.request_tag_read()
+                        if loop_started - target_missing_since >= TAG_REACQUIRE_TIMEOUT_SEC:
+                            stage = "自動停止: 標的Tagを1秒間再取得できない"
                     else:
+                        target_missing_since = None
                         horizontal_error = robot_center_horizontal_error(
                             target,
                             camera_lateral_offset_m=camera_hensuu.camera_lateral_offset_m,
@@ -249,9 +260,20 @@ def main() -> None:
                     last = tags.get(target_ids[-1], camera_hensuu.tag_max_age_sec) if target_ids else None
                     target = first if target_ids and len(target_ids) == 1 else midpoint(first, last) if first and last else None
                     distance = AIM_DISTANCE_M.get(target_row)
-                    if target is None or target.distance_m is None or distance is None:
-                        stage = "自動停止: 標的Tagまたは距離が読めない"
+                    if target is None:
+                        if target_missing_since is None:
+                            target_missing_since = loop_started
+                        vision_worker.request_tag_read()
+                        if loop_started - target_missing_since >= TAG_REACQUIRE_TIMEOUT_SEC:
+                            stage = "自動停止: 標的Tagを1秒間再取得できない"
+                    elif target.distance_m is None:
+                        target_missing_since = None
+                        stage = "自動停止: Tag距離が読めない。1m補正を確認"
+                    elif distance is None:
+                        target_missing_since = None
+                        stage = "自動停止: この段の発射距離が未設定"
                     else:
+                        target_missing_since = None
                         horizontal_error = robot_center_horizontal_error(
                             target,
                             camera_lateral_offset_m=camera_hensuu.camera_lateral_offset_m,
@@ -275,8 +297,13 @@ def main() -> None:
                     last = tags.get(target_ids[-1], camera_hensuu.tag_max_age_sec) if target_ids else None
                     target = first if target_ids and len(target_ids) == 1 else midpoint(first, last) if first and last else None
                     if target is None:
-                        stage = "自動停止: 標的Tagが見えない"
+                        if target_missing_since is None:
+                            target_missing_since = loop_started
+                        vision_worker.request_tag_read()
+                        if loop_started - target_missing_since >= TAG_REACQUIRE_TIMEOUT_SEC:
+                            stage = "自動停止: 標的Tagを1秒間再取得できない"
                     else:
+                        target_missing_since = None
                         horizontal_error = robot_center_horizontal_error(
                             target,
                             camera_lateral_offset_m=camera_hensuu.camera_lateral_offset_m,
@@ -301,6 +328,7 @@ def main() -> None:
                         target_row = None
                         tag_search_started_at = None
                         yaw_aligned_since = None
+                        target_missing_since = None
                         stage = "リセット中: 地面ドリブル姿勢へ"
                     elif lift_action is not None and lift_action.update():
                         lift_action = None
