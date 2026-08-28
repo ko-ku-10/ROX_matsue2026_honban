@@ -38,18 +38,25 @@ TAG_CENTER_TOLERANCE = 0.08
 TAG_ROTATE_GAIN = 0.60
 TAG_ROTATE_MAX_SPEED = 0.20
 
-# Tag 8を中央へ合わせた後に、まっすぐ進む設定。
-# 実機で測って、この2つだけを書き換える。
+# Tag8の正面へ近づく設定。距離はカメラが読み取った値[m]。
+TAG8_TARGET_DISTANCE_M = 1.0
+TAG8_DISTANCE_TOLERANCE_M = 0.08
+TAG8_DISTANCE_GAIN = 0.45
+
+# Tag8の正面1m地点から、ゲートを通る設定。
+# 車輪距離を読んでいないため、2m通過は「速度 × 時間」で実現する。
+# 実機で2m進む時間を測って TAG8_FINAL_FORWARD_SEC だけ書き換える。
+TAG8_FINAL_FORWARD_DISTANCE_M = 2.0
 # この機体では負の値が「ゲートへ進む」向き。
 TAG8_FORWARD_SPEED = -0.20
-TAG8_FORWARD_SEC = 2.0
+TAG8_FINAL_FORWARD_SEC = 2.0
 
 
 def main() -> None:
     print("GAME1: 手動走行 + Tag8ゲート通過支援")
     print("  タッチパッド: 手動 / 自動を切替")
     print("  手動モードの○: catchを掴む / □: catchを開く")
-    print("  自動モードの↑: Tag8へ正面合わせ後、2秒間前進")
+    print("  自動モードの↑: Tag8正面へ移動 → 距離1m → 2m通過")
     print("  OPTIONS: 非常停止")
 
     runtime = None
@@ -100,7 +107,10 @@ def main() -> None:
             # 手動走行中はカメラを一切読まない。重いAprilTag検出による
             # スティック操作のラグを防ぐ。↑を押した時と中心合わせ中だけ読む。
             start_gate = mode.auto_enabled and state.was_pressed(Button.DPAD_UP)
-            needs_tag_frame = start_gate or stage == "Tag8を画面中央へ合わせ中"
+            needs_tag_frame = start_gate or stage in {
+                "Tag8を画面中央へ合わせ中",
+                "Tag8正面の1.0m地点へ移動中",
+            }
             # 手動時は軽い映像表示だけにし、重いTag検出は自動中だけ10Hzに制限する。
             dashboard_camera_due = status_site.camera_due(loop_started)
             tag_read_due = start_gate or (
@@ -160,10 +170,49 @@ def main() -> None:
                             horizontal_error=horizontal_error,
                         )
                         if auto == MotionCommand.stop():
-                            forward_until = loop_started + TAG8_FORWARD_SEC
-                            stage = f"Tag8へ前進中: 残り{TAG8_FORWARD_SEC:.1f}秒"
+                            stage = "Tag8正面の1.0m地点へ移動中"
 
-                elif stage.startswith("Tag8へ前進中"):
+                elif stage == "Tag8正面の1.0m地点へ移動中":
+                    tag8 = tags.get(TAG_GATE, camera_hensuu.tag_max_age_sec)
+                    if camera_error:
+                        stage = "自動停止: カメラエラー"
+                    elif tag8 is None or tag8.distance_m is None:
+                        stage = "自動停止: Tag8または距離を見失った"
+                    else:
+                        horizontal_error = robot_center_horizontal_error(
+                            tag8,
+                            camera_lateral_offset_m=camera_hensuu.camera_lateral_offset_m,
+                            focal_length_px=camera_hensuu.camera_focal_length_px,
+                        )
+                        turn = face_target_command(
+                            tag8,
+                            center_tolerance=TAG_CENTER_TOLERANCE,
+                            rotation_gain=TAG_ROTATE_GAIN,
+                            maximum_speed=TAG_ROTATE_MAX_SPEED,
+                            horizontal_error=horizontal_error,
+                        )
+                        distance_error = tag8.distance_m - TAG8_TARGET_DISTANCE_M
+                        if abs(horizontal_error) > TAG_CENTER_TOLERANCE:
+                            # 正面からずれた時は、前後に動かず向き直してから接近する。
+                            auto = turn
+                        elif abs(distance_error) <= TAG8_DISTANCE_TOLERANCE_M:
+                            forward_until = loop_started + TAG8_FINAL_FORWARD_SEC
+                            stage = (
+                                f"Tag8正面1m到達: {TAG8_FINAL_FORWARD_DISTANCE_M:.1f}m通過中 "
+                                f"(残り{TAG8_FINAL_FORWARD_SEC:.1f}秒)"
+                            )
+                        else:
+                            # 遠ければTag8へ、近すぎればTag8から離れる。
+                            # TAG8_FORWARD_SPEED の符号だけで実機の前後方向を合わせる。
+                            maximum_speed = abs(TAG8_FORWARD_SPEED)
+                            auto = MotionCommand(
+                                forward=max(-maximum_speed, min(
+                                    maximum_speed,
+                                    distance_error * TAG8_DISTANCE_GAIN * (-1.0 if TAG8_FORWARD_SPEED < 0.0 else 1.0),
+                                )),
+                            )
+
+                elif stage.startswith("Tag8正面1m到達"):
                     if loop_started >= forward_until:
                         stage = "Tag8ゲート通過完了: 手動で続行"
                     else:
