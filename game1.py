@@ -34,9 +34,17 @@ from rox_mecanum import (
 TAG_GATE = 8
 
 # Tag 8を画面中央へ向ける時の設定。
-TAG_CENTER_TOLERANCE = 0.08
+# 画像中心からのずれ。小さいほど正面を厳密に合わせる。
+TAG_CENTER_TOLERANCE = 0.03
+# 一瞬だけ中心を横切った場合に前進しないよう、正面を保つ必要がある時間。
+TAG_CENTER_STABLE_SEC = 0.30
 TAG_ROTATE_GAIN = 0.60
 TAG_ROTATE_MAX_SPEED = 0.20
+# Tag面の向きも正面にする設定。カメラ未校正時は近似値になる。
+TAG_YAW_TOLERANCE_DEG = 4.0
+TAG_YAW_GAIN = 0.020
+# 実機で角度合わせが逆に回る時だけ -1.0 に変更する。
+TAG_YAW_DIRECTION = 1.0
 
 # Tag8の正面へ近づく設定。距離はカメラが読み取った値[m]。
 TAG8_TARGET_DISTANCE_M = 1.0
@@ -84,6 +92,8 @@ def main() -> None:
         stage = "手動走行"
         forward_until = 0.0
         next_tag_read_at = 0.0
+        centered_since = None
+        yaw_aligned_since = None
         shown_stage = None
 
         while True:
@@ -99,6 +109,8 @@ def main() -> None:
             # タッチパッドを押したら、途中のゲート通過は即座に取り消す。
             if mode.update(state):
                 forward_until = 0.0
+                centered_since = None
+                yaw_aligned_since = None
                 stage = "自動待機: ↑でTag8ゲート通過" if mode.auto_enabled else "手動走行"
                 print(f"モード: {'自動' if mode.auto_enabled else '完全手動'}")
 
@@ -109,6 +121,7 @@ def main() -> None:
             start_gate = mode.auto_enabled and state.was_pressed(Button.DPAD_UP)
             needs_tag_frame = start_gate or stage in {
                 "Tag8を画面中央へ合わせ中",
+                "Tag8の角度を正面へ合わせ中",
                 "Tag8正面の1.0m地点へ移動中",
             }
             # 手動時は軽い映像表示だけにし、重いTag検出は自動中だけ10Hzに制限する。
@@ -141,6 +154,8 @@ def main() -> None:
 
             # ↑は操縦者の「ゲートを通る」承認ボタン。
             if start_gate:
+                centered_since = None
+                yaw_aligned_since = None
                 if camera_error:
                     stage = "自動停止: カメラエラー"
                 elif tags.get(TAG_GATE, camera_hensuu.tag_max_age_sec) is None:
@@ -169,15 +184,49 @@ def main() -> None:
                             maximum_speed=TAG_ROTATE_MAX_SPEED,
                             horizontal_error=horizontal_error,
                         )
-                        if auto == MotionCommand.stop():
+                        if abs(horizontal_error) > TAG_CENTER_TOLERANCE:
+                            centered_since = None
+                        elif centered_since is None:
+                            centered_since = loop_started
+                        elif loop_started - centered_since >= TAG_CENTER_STABLE_SEC:
+                            yaw_aligned_since = None
+                            stage = "Tag8の角度を正面へ合わせ中"
+
+                elif stage == "Tag8の角度を正面へ合わせ中":
+                    tag8 = tags.get(TAG_GATE, camera_hensuu.tag_max_age_sec)
+                    if camera_error:
+                        stage = "自動停止: カメラエラー"
+                    elif tag8 is None or tag8.yaw_degrees is None:
+                        # 角度が不明なままでは「真正面」と判定しない。
+                        stage = "自動停止: Tag8の角度を読めない"
+                    else:
+                        horizontal_error = robot_center_horizontal_error(
+                            tag8,
+                            camera_lateral_offset_m=camera_hensuu.camera_lateral_offset_m,
+                            focal_length_px=camera_hensuu.camera_focal_length_px,
+                        )
+                        if abs(horizontal_error) > TAG_CENTER_TOLERANCE:
+                            centered_since = None
+                            yaw_aligned_since = None
+                            stage = "Tag8を画面中央へ合わせ中"
+                        elif abs(tag8.yaw_degrees) > TAG_YAW_TOLERANCE_DEG:
+                            yaw_aligned_since = None
+                            yaw_speed = max(
+                                -TAG_ROTATE_MAX_SPEED,
+                                min(TAG_ROTATE_MAX_SPEED, tag8.yaw_degrees * TAG_YAW_GAIN * TAG_YAW_DIRECTION),
+                            )
+                            auto = MotionCommand(rotate=yaw_speed)
+                        elif yaw_aligned_since is None:
+                            yaw_aligned_since = loop_started
+                        elif loop_started - yaw_aligned_since >= TAG_CENTER_STABLE_SEC:
                             stage = "Tag8正面の1.0m地点へ移動中"
 
                 elif stage == "Tag8正面の1.0m地点へ移動中":
                     tag8 = tags.get(TAG_GATE, camera_hensuu.tag_max_age_sec)
                     if camera_error:
                         stage = "自動停止: カメラエラー"
-                    elif tag8 is None or tag8.distance_m is None:
-                        stage = "自動停止: Tag8または距離を見失った"
+                    elif tag8 is None or tag8.distance_m is None or tag8.yaw_degrees is None:
+                        stage = "自動停止: Tag8・距離・角度を見失った"
                     else:
                         horizontal_error = robot_center_horizontal_error(
                             tag8,
@@ -192,9 +241,12 @@ def main() -> None:
                             horizontal_error=horizontal_error,
                         )
                         distance_error = tag8.distance_m - TAG8_TARGET_DISTANCE_M
-                        if abs(horizontal_error) > TAG_CENTER_TOLERANCE:
-                            # 正面からずれた時は、前後に動かず向き直してから接近する。
+                        if abs(horizontal_error) > TAG_CENTER_TOLERANCE or abs(tag8.yaw_degrees) > TAG_YAW_TOLERANCE_DEG:
+                            # 正面からずれた時は、前後に動かず、最初の正面合わせからやり直す。
+                            centered_since = None
+                            yaw_aligned_since = None
                             auto = turn
+                            stage = "Tag8を画面中央へ合わせ中"
                         elif abs(distance_error) <= TAG8_DISTANCE_TOLERANCE_M:
                             forward_until = loop_started + TAG8_FINAL_FORWARD_SEC
                             stage = (

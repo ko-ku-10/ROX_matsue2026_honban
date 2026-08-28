@@ -7,6 +7,7 @@ OpenCVは実機でのみ必要。カメラが未接続のPCでも、このモジ
 from __future__ import annotations
 
 from dataclasses import dataclass
+from math import atan2, degrees
 from time import monotonic
 from typing import Iterable
 
@@ -22,6 +23,9 @@ class TagObservation:
     distance_m: float | None
     timestamp: float
     pixel_size: float | None = None
+    # Tag平面のカメラに対する左右の傾き。正面なら0°。
+    # 魚眼補正なしでは近似値のため、安全な正面合わせ用にだけ使う。
+    yaw_degrees: float | None = None
 
     @property
     def horizontal_error(self) -> float:
@@ -93,11 +97,13 @@ class AprilTagDetector:
         self.focal_length_px = float(focal_length_px)
         try:
             import cv2
+            import numpy as np
         except ImportError as error:  # pragma: no cover - 実機依存
             raise RuntimeError("OpenCVが必要です: pip install 'rox-mecanum[vision]'") from error
         if not hasattr(cv2, "aruco"):
             raise RuntimeError("opencv-contrib-python をインストールしてください")
         self._cv2 = cv2
+        self._np = np
         self._dictionary = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_APRILTAG_16h5)
         self._parameters = cv2.aruco.DetectorParameters()
         self._detector = cv2.aruco.ArucoDetector(self._dictionary, self._parameters)
@@ -121,8 +127,42 @@ class AprilTagDetector:
             distance = None
             if self.focal_length_px > 0.0 and pixel_size > 0.0:
                 distance = self.tag_size_m * self.focal_length_px / pixel_size
-            result.append(TagObservation(int(raw_id), center_x, center_y, int(width), distance, timestamp, pixel_size))
+            yaw = self._tag_yaw_degrees(points, width, height)
+            result.append(TagObservation(int(raw_id), center_x, center_y, int(width), distance, timestamp, pixel_size, yaw))
         return result
+
+    def _tag_yaw_degrees(self, image_points: object, width: int, height: int) -> float | None:
+        """Tagの4隅から、Tag面がカメラ正面に対して傾いた角度を推定する。"""
+        if self.focal_length_px <= 0.0 or width <= 0 or height <= 0:
+            return None
+        half = self.tag_size_m / 2.0
+        object_points = self._np.array([
+            [-half, half, 0.0], [half, half, 0.0],
+            [half, -half, 0.0], [-half, -half, 0.0],
+        ], dtype=self._np.float32)
+        camera_matrix = self._np.array([
+            [self.focal_length_px, 0.0, width / 2.0],
+            [0.0, self.focal_length_px, height / 2.0],
+            [0.0, 0.0, 1.0],
+        ], dtype=self._np.float64)
+        try:
+            solved, rotation_vector, _ = self._cv2.solvePnP(
+                object_points,
+                self._np.asarray(image_points, dtype=self._np.float32),
+                camera_matrix,
+                self._np.zeros((4, 1), dtype=self._np.float64),
+                flags=getattr(self._cv2, "SOLVEPNP_IPPE_SQUARE", self._cv2.SOLVEPNP_ITERATIVE),
+            )
+            if not solved:
+                return None
+            rotation, _ = self._cv2.Rodrigues(rotation_vector)
+            normal = rotation[:, 2]
+            # Tagの表裏定義によらず、カメラ側を向く法線で計算する。
+            if normal[2] < 0.0:
+                normal = -normal
+            return degrees(atan2(float(normal[0]), float(normal[2])))
+        except self._cv2.error:
+            return None
 
 
 class OpenCVStereoCamera:
@@ -333,4 +373,5 @@ def midpoint(first: TagObservation, second: TagObservation) -> TagObservation:
         distance_m=distance,
         timestamp=min(first.timestamp, second.timestamp),
         pixel_size=(first.pixel_size + second.pixel_size) / 2.0 if first.pixel_size is not None and second.pixel_size is not None else None,
+        yaw_degrees=(first.yaw_degrees + second.yaw_degrees) / 2.0 if first.yaw_degrees is not None and second.yaw_degrees is not None else None,
     )
