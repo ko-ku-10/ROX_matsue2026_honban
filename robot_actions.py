@@ -40,9 +40,10 @@ SERVO_MOVE_TIMEOUT_SEC = 8.0
 # PIDの通常保持精度は hensuu.py の値のまま変えない。
 SERVO_MOVE_TOLERANCE_DEG = 3.0
 
-# 持上げ中だけ使うliftの強さ。大きくするほど速く強く動く。
+# 持上げ中だけ使うliftの強さ。強い衝撃や負荷でモーター保護が働かないよう、
+# 初期値は控えめな60%。遅すぎなければこのまま使い、必要時だけ少しずつ上げる。
 # 持上げ終了後は、hensuu.py の通常PID上限へ自動で戻る。
-LIFT_MOVE_SPEED_PERCENT = 100
+LIFT_MOVE_SPEED_PERCENT = 60
 _configured_pins = set()
 
 

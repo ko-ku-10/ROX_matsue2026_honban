@@ -48,7 +48,8 @@ lift_brake_time_sec = 0.08
 # 起動時のcatch原点合わせ。開く側の機械ストッパーまで動かし、
 # mechPosがほぼ変わらなくなった位置を0度にする。
 # 閉じる向きへ動いてしまった場合だけ、catch_homing_direction を -1 に変える。
-catch_homing_speed_percent = 15.0
+# 起動時は衝撃を避けるため低速でストッパーへ当てる。
+catch_homing_speed_percent = 10.0
 catch_homing_direction = -1
 catch_homing_stillness_deg = 0.2
 catch_homing_stillness_sec = 0.10
@@ -57,7 +58,7 @@ catch_homing_timeout_sec = 8.0
 # 起動時のlift原点合わせ。地面ドリブル位置の機械ストッパーまで低速で下ろし、
 # mechPosがほぼ変わらなくなった位置を0度にする。
 # 上へ動いてしまった場合だけ、lift_homing_direction を -1 に変える。
-lift_homing_speed_percent = 12.0
+lift_homing_speed_percent = 8.0
 lift_homing_direction = 1
 lift_homing_stillness_deg = 0.2
 lift_homing_stillness_sec = 0.10
