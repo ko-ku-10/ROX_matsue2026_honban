@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from math import atan2, degrees
+from threading import Lock
 from time import monotonic
 from typing import Iterable
 
@@ -66,13 +67,16 @@ class TagStore:
 
     def __init__(self) -> None:
         self._latest: dict[int, TagObservation] = {}
+        self._lock = Lock()
 
     def update(self, observations: Iterable[TagObservation]) -> None:
-        for observation in observations:
-            self._latest[observation.tag_id] = observation
+        with self._lock:
+            for observation in observations:
+                self._latest[observation.tag_id] = observation
 
     def get(self, tag_id: int, max_age_sec: float = 0.35, now: float | None = None) -> TagObservation | None:
-        observation = self._latest.get(int(tag_id))
+        with self._lock:
+            observation = self._latest.get(int(tag_id))
         current = monotonic() if now is None else now
         if observation is None or current - observation.timestamp > max_age_sec:
             return None
@@ -82,7 +86,8 @@ class TagStore:
         return {tag_id: item for tag_id in ids if (item := self.get(tag_id, max_age_sec)) is not None}
 
     def snapshot(self) -> dict[int, TagObservation]:
-        return dict(self._latest)
+        with self._lock:
+            return dict(self._latest)
 
 
 class AprilTagDetector:

@@ -45,6 +45,7 @@ from .vision import AprilTagDetector, OpenCVSingleCamera, OpenCVStereoCamera, RD
 from .runtime import RobotRuntime
 from .maintenance_site import MaintenanceSite
 from .game_status_site import GameStatusSite
+from .vision_worker import VisionWorker
 from .targeting import PanelTarget, choose_panel_target
 from .ball_mechanism import BallMechanism
 
@@ -104,6 +105,7 @@ __all__ = [
     "RobotRuntime",
     "MaintenanceSite",
     "GameStatusSite",
+    "VisionWorker",
     "PanelTarget",
     "choose_panel_target",
 ]

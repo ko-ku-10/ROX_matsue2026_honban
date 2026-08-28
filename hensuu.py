@@ -7,7 +7,9 @@ serial_baud = 921600
 # DualSenseの接続モード。
 # "connect_each_run": プログラム起動時に接続し、終了時にBluetoothを切断する（電池節約）。
 # "keep_connected": 終了時に切断しない。続けて別のGAME/実験を実行する時に使う。
-dualsense_connection_mode = "connect_each_run"
+# USBケーブルで使う本番設定。Bluetoothを使う場合だけ "connect_each_run" または
+# "keep_connected" に変更する。
+dualsense_connection_mode = "wired"
 # ペアリング済みDualSenseのMACアドレス。違うコントローラーを使う時だけ変更する。
 dualsense_mac_address = "0C:27:56:31:25:90"
 dualsense_connect_timeout_sec = 30.0

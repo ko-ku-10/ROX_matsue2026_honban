@@ -12,7 +12,7 @@ from enum import Enum
 import camera_hensuu
 import hensuu
 import robot_actions
-from rox_mecanum import Button, GameStatusSite, MotionCommand, RobotRuntime, TagStore, open_camera
+from rox_mecanum import Button, GameStatusSite, MotionCommand, RobotRuntime, TagStore, VisionWorker, open_camera
 
 
 # スティックの微妙なずれを無視する範囲。勝手に走るなら少し上げる。
@@ -38,6 +38,7 @@ def main() -> None:
     runtime = None
     camera = None
     status_site = None
+    vision_worker = None
 
     try:
         runtime = RobotRuntime.open()
@@ -60,6 +61,12 @@ def main() -> None:
         except Exception as error:
             camera = None
             camera_error = str(error)
+        if camera is not None:
+            vision_worker = VisionWorker(
+                camera, None, tags, status_site,
+                camera_hz=hensuu.dashboard_camera_hz, tag_hz=hensuu.dashboard_tag_hz,
+            )
+            vision_worker.start()
 
         stage = Stage.WAIT
         move_started = time.monotonic()
@@ -69,14 +76,12 @@ def main() -> None:
             loop_started = time.monotonic()
             state = runtime.controller.read()
 
-            # GAME3はTagを使わない。カメラ映像だけを低頻度でサイトへ渡す。
-            if camera is not None and status_site.camera_due(loop_started):
-                try:
-                    image = camera.read()
-                    status_site.set_camera_frame(image, [])
-                    camera_error = ""
-                except Exception as error:
-                    camera_error = str(error)
+            # GAME3はTagを使わない。映像表示は別スレッドで行う。
+            if vision_worker is not None:
+                vision_worker.set_paused(
+                    state.left_stick.magnitude > 0.05 or state.right_stick.magnitude > 0.05
+                )
+                camera_error = vision_worker.error
 
             # OPTIONSは最優先。GPIOもモーターも停止して終了する。
             if state.was_pressed(Button.OPTIONS):
@@ -187,6 +192,8 @@ def main() -> None:
     finally:
         # エラー、Ctrl+C、OPTIONS、通常終了の全てでGPIOをLOWにする。
         robot_actions.all_off()
+        if vision_worker is not None:
+            vision_worker.stop()
         if status_site is not None:
             status_site.close()
         if camera is not None:

@@ -20,6 +20,7 @@ from rox_mecanum import (
     MotionCommand,
     RobotRuntime,
     TagStore,
+    VisionWorker,
     add_manual_command,
     face_target_command,
     open_camera,
@@ -70,6 +71,7 @@ def main() -> None:
     runtime = None
     camera = None
     status_site = None
+    vision_worker = None
 
     try:
         runtime = RobotRuntime.open()
@@ -87,11 +89,16 @@ def main() -> None:
         tags = TagStore()
         mode = ModeController()
         status_site = GameStatusSite("GAME1", hensuu.dashboard_port, hensuu.dashboard_camera_hz)
+        vision_worker = VisionWorker(
+            camera, detector, tags, status_site,
+            camera_hz=hensuu.dashboard_camera_hz, tag_hz=hensuu.dashboard_tag_hz,
+        )
+        vision_worker.start()
         print(f"状態監視サイト: {status_site.url()}")
 
         stage = "手動走行"
         forward_until = 0.0
-        next_tag_read_at = 0.0
+        tag_search_until = 0.0
         centered_since = None
         yaw_aligned_since = None
         shown_stage = None
@@ -120,27 +127,19 @@ def main() -> None:
             # スティック操作のラグを防ぐ。↑を押した時と中心合わせ中だけ読む。
             start_gate = mode.auto_enabled and state.was_pressed(Button.DPAD_UP)
             needs_tag_frame = start_gate or stage in {
+                "Tag8を検出中",
                 "Tag8を画面中央へ合わせ中",
                 "Tag8の角度を正面へ合わせ中",
                 "Tag8正面の1.0m地点へ移動中",
             }
-            # 手動時は軽い映像表示だけにし、重いTag検出は自動中だけ10Hzに制限する。
-            dashboard_camera_due = status_site.camera_due(loop_started)
-            tag_read_due = start_gate or (
-                needs_tag_frame and loop_started >= next_tag_read_at
+            # カメラ処理は別スレッド。ここでは有効化だけ行い、操縦入力は待たない。
+            vision_worker.set_paused(
+                state.left_stick.magnitude > 0.05 or state.right_stick.magnitude > 0.05
             )
-            camera_error = ""
-            if tag_read_due or dashboard_camera_due:
-                try:
-                    image = camera.read()
-                    observations = detector.detect(image) if tag_read_due else []
-                    if tag_read_due:
-                        tags.update(observations)
-                        next_tag_read_at = loop_started + 1.0 / hensuu.dashboard_tag_hz
-                    if dashboard_camera_due:
-                        status_site.set_camera_frame(image, observations)
-                except Exception as error:
-                    camera_error = str(error)
+            vision_worker.set_tag_detection_enabled(needs_tag_frame)
+            if start_gate:
+                vision_worker.request_tag_read()
+            camera_error = vision_worker.error
 
             # GAME1の完全手動ではcatchだけを操作できる。
             # liftにはここから一切命令を出さない。
@@ -158,14 +157,22 @@ def main() -> None:
                 yaw_aligned_since = None
                 if camera_error:
                     stage = "自動停止: カメラエラー"
-                elif tags.get(TAG_GATE, camera_hensuu.tag_max_age_sec) is None:
-                    # Tagが見えない時に勝手に探して走らない。
-                    stage = "自動停止: Tag8が見えない"
                 else:
-                    stage = "Tag8を画面中央へ合わせ中"
+                    # 読取りは別スレッドなので、最大0.5秒だけ応答を待つ。
+                    tag_search_until = loop_started + 0.5
+                    stage = "Tag8を検出中"
 
             if mode.auto_enabled:
-                if stage == "Tag8を画面中央へ合わせ中":
+                if stage == "Tag8を検出中":
+                    tag8 = tags.get(TAG_GATE, camera_hensuu.tag_max_age_sec)
+                    if camera_error:
+                        stage = "自動停止: カメラエラー"
+                    elif tag8 is not None:
+                        stage = "Tag8を画面中央へ合わせ中"
+                    elif loop_started >= tag_search_until:
+                        stage = "自動停止: Tag8が見えない"
+
+                elif stage == "Tag8を画面中央へ合わせ中":
                     tag8 = tags.get(TAG_GATE, camera_hensuu.tag_max_age_sec)
                     if camera_error:
                         stage = "自動停止: カメラエラー"
@@ -297,6 +304,8 @@ def main() -> None:
             runtime.emergency_stop()
     finally:
         robot_actions.all_off()
+        if vision_worker is not None:
+            vision_worker.stop()
         if status_site is not None:
             status_site.close()
         if camera is not None:
