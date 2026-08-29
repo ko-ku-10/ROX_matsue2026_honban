@@ -314,18 +314,21 @@ def main() -> None:
                         target.lateral_m is None
                         or target.forward_m is None
                         or target.forward_m <= 0.0
-                        or target.yaw_degrees is None
                     ):
                         target_missing_since = None
-                        stage = "自動停止: 標的Tagの位置(x/z/yaw)を読めない"
-                        auto_debug["判断"] = "x・z・yawのどれかが無効。停止"
+                        stage = "自動停止: 標的Tagの位置(x/z)を読めない"
+                        auto_debug["判断"] = "x・zのどちらかが無効。停止"
                     else:
                         target_missing_since = None
                         position_x = target.lateral_m + camera_hensuu.camera_lateral_offset_m
                         distance_error = target.forward_m - AIM_DISTANCE_M[target_row]
-                        # カメラで見た角度に、カメラ取付け角の補正を足して
-                        # ロボット本体がTagへ真正面を向くための角度にする。
-                        raw_robot_yaw_error = target.yaw_degrees + camera_hensuu.camera_yaw_offset_deg
+                        # 魚眼の端は真横とみなす。Tag面のsolvePnP角度ではなく、
+                        # 画面位置から求めた方位角で先にTagを画面中央へ入れる。
+                        # 右端=+90°、左端=-90°（camera_hensuuで変更可能）。
+                        raw_robot_yaw_error = (
+                            target.horizontal_error * camera_hensuu.camera_edge_bearing_deg
+                            + camera_hensuu.camera_yaw_offset_deg
+                        )
                         if filtered_robot_yaw is None:
                             filtered_robot_yaw = raw_robot_yaw_error
                         else:
@@ -344,7 +347,9 @@ def main() -> None:
                             "目標 z[m]": round(AIM_DISTANCE_M[target_row], 3),
                             "x誤差[m]": round(position_x, 3),
                             "z誤差[m]": round(distance_error, 3),
-                            "カメラTag角度[°]": round(target.yaw_degrees, 2),
+                            "画像横ずれ[-1〜+1]": round(target.horizontal_error, 3),
+                            "画像方位角[°]": round(raw_robot_yaw_error, 2),
+                            "Tag面角度[°]": None if target.yaw_degrees is None else round(target.yaw_degrees, 2),
                             "カメラ取付け補正[°]": round(camera_hensuu.camera_yaw_offset_deg, 2),
                             "生ロボット角度誤差[°]": round(raw_robot_yaw_error, 2),
                             "ロボット角度誤差[°]": round(robot_yaw_error, 2),
