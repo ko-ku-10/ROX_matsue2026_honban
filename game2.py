@@ -32,7 +32,7 @@ from rox_mecanum import (
 # ==================================================
 
 # Tag位置（カメラ座標の右x・前z）を使う照準の速さ・許容範囲。
-# まず画像中心へ旋回してから位置を使うため、魚眼の端の値で横移動しない。
+# まずTag面の角度を0°へ旋回してから位置を使うため、斜め向きのxで横移動しない。
 # 自動照準は、手動操作の最大速度(1.00)の半分までに制限する。
 # 暴走を防ぐため、横移動・前後移動ともにここを超えない。
 AUTO_STRAFE_MAX_SPEED = 0.50
@@ -295,7 +295,7 @@ def main() -> None:
                         auto_debug["判断"] = "探索時間切れ。停止"
 
                 # x はTagのカメラ座標の左右[m]、z は正面距離[m]。
-                # 1. 横移動で正面へ → 2. 前後距離を合わせる → 3. Tag面を垂直にする。
+                # 1. Tag面を垂直にする → 2. 横移動で正面へ → 3. 前後距離を合わせる。
                 elif target_row is not None and stage == f"{target_row}段: Tag位置(x/z)へ照準中":
                     first = tags.get(target_ids[0], AUTO_TAG_MAX_AGE_SEC) if target_ids else None
                     last = tags.get(target_ids[-1], AUTO_TAG_MAX_AGE_SEC) if target_ids else None
@@ -368,8 +368,33 @@ def main() -> None:
                             stage = "照準完了: △で持上げ"
                             auto_debug["判断"] = "角度・x・zがすべて許容範囲内。照準完了"
                         else:
-                            # 1. 横移動だけで、Tagの正面位置 x=0m へ寄せる。
-                            if abs(position_x) > AUTO_LATERAL_TOLERANCE_M:
+                            # Tagのxはロボットが斜めを向くだけで変わる。
+                            # そのため必ず「角度 → 横x → 前後z」の順で1軸ずつ合わせる。
+                            # 角度が合うまでは、横移動・前後移動を一切送らない。
+                            if not angle_is_zero:
+                                lateral_checked_at = None
+                                lateral_error_at_check = None
+                                distance_checked_at = None
+                                distance_error_at_check = None
+                                rotate = max(
+                                    -AUTO_ROTATE_MAX_SPEED,
+                                    min(
+                                        AUTO_ROTATE_MAX_SPEED,
+                                        robot_yaw_error * AUTO_ROTATE_GAIN * TAG_YAW_DIRECTION,
+                                    ),
+                                )
+                                if abs(rotate) < AUTO_ROTATE_MIN_SPEED:
+                                    rotate = AUTO_ROTATE_MIN_SPEED if rotate >= 0.0 else -AUTO_ROTATE_MIN_SPEED
+                                auto = MotionCommand(rotate=rotate)
+                                auto_debug.update({
+                                    "判断": "1/3: Tag面角度を0°へ旋回中",
+                                    "自動 前後": 0.0,
+                                    "自動 横": 0.0,
+                                    "自動 旋回": round(rotate, 3),
+                                })
+
+                            # 2. 正面を向けた後で、Tagの正面位置 x=0m へ横移動する。
+                            elif abs(position_x) > AUTO_LATERAL_TOLERANCE_M:
                                 distance_checked_at = None
                                 distance_error_at_check = None
                                 # 横移動でも、x誤差が縮まらなければ止める。
@@ -397,13 +422,13 @@ def main() -> None:
                                 if not stage.startswith("自動停止:"):
                                     auto = MotionCommand(strafe=strafe)
                                     auto_debug.update({
-                                        "判断": "1/3: x=0mへ横スライド中",
+                                        "判断": "2/3: x=0mへ横スライド中",
                                         "自動 前後": 0.0,
                                         "自動 横": round(strafe, 3),
                                         "自動 旋回": 0.0,
                                     })
 
-                            # 2. 横位置が合ったら、前後だけで設定距離zへ移動する。
+                            # 3. 横位置が合ったら、前後だけで設定距離zへ移動する。
                             elif abs(distance_error) > DISTANCE_TOLERANCE_M:
                                 lateral_checked_at = None
                                 lateral_error_at_check = None
@@ -414,7 +439,7 @@ def main() -> None:
                                 elif loop_started - distance_checked_at >= AUTO_FORWARD_PROGRESS_SEC:
                                     progress = distance_error_at_check - position_error_size
                                     if progress < AUTO_FORWARD_MIN_PROGRESS_M:
-                                        stage = "自動停止: Tag 18との距離zが改善しない"
+                                        stage = "自動停止: Tagとの距離zが改善しない"
                                         auto_debug["判断"] = "0.7秒間、距離zが改善しないため停止"
                                     else:
                                         distance_checked_at = loop_started
@@ -426,36 +451,15 @@ def main() -> None:
                                         min(
                                             AUTO_FORWARD_MAX_SPEED,
                                             distance_error * AUTO_FORWARD_GAIN * AUTO_FORWARD_DIRECTION,
-                                    ),
+                                        ),
                                     )
                                     auto = MotionCommand(forward=forward)
                                     auto_debug.update({
-                                        "判断": "2/3: zを設定距離へ前後移動中",
+                                        "判断": "3/3: zを設定距離へ前後移動中",
                                         "自動 前後": round(forward, 3),
                                         "自動 横": 0.0,
                                         "自動 旋回": 0.0,
                                     })
-
-                            # 3. 最後にTag面の角度を0°へ合わせる。
-                            else:
-                                distance_checked_at = None
-                                distance_error_at_check = None
-                                rotate = max(
-                                    -AUTO_ROTATE_MAX_SPEED,
-                                    min(
-                                        AUTO_ROTATE_MAX_SPEED,
-                                        robot_yaw_error * AUTO_ROTATE_GAIN * TAG_YAW_DIRECTION,
-                                    ),
-                                )
-                                if abs(rotate) < AUTO_ROTATE_MIN_SPEED:
-                                    rotate = AUTO_ROTATE_MIN_SPEED if rotate >= 0.0 else -AUTO_ROTATE_MIN_SPEED
-                                auto = MotionCommand(rotate=rotate)
-                                auto_debug.update({
-                                    "判断": "3/3: Tag面角度を0°へ旋回中",
-                                    "自動 前後": 0.0,
-                                    "自動 横": 0.0,
-                                    "自動 旋回": round(rotate, 3),
-                                })
 
                 # △: GAME3と共通の持上げ動作。
                 elif stage == "照準完了: △で持上げ" and state.was_pressed(Button.TRIANGLE):
