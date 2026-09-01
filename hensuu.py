@@ -5,7 +5,9 @@ serial_port = "/dev/ttyUSB0"
 serial_baud = 921600
 
 # catch/liftの物理0度を一度だけ保存するファイル。
-# 通常のGAME起動ではこの値を使うため、ストッパーへ毎回押し付けない。
+# EDULITE05は電源投入でmechPosが360度単位にずれるため、保存・比較時には
+# 1回転内の角度へ自動的に丸める。通常のGAME起動ではこの値を使うため、
+# ストッパーへ毎回押し付けない。
 # 原点を作り直す時だけ ``python3 set_servo_origins.py`` を実行する。
 servo_origin_file = "servo_origins.json"
 
@@ -32,6 +34,15 @@ mecanum_acceleration_percent_per_sec = 300.0
 # スティックを戻した時の減速の速さ。加速より大きくし、止まりたい時は早く止まる。
 # 800なら100%→停止まで約0.13秒。急すぎるなら小さくする。
 mecanum_deceleration_percent_per_sec = 800.0
+# 足回りのガタガタ対策。公式サンプルと同じ値。
+# スティック値が細かく変わっても、各輪はこの秒数より短い間隔では再送しない。
+mecanum_command_minimum_interval_sec = 0.05
+# この値以上の大きな指令変化だけは、上の間隔を待たず即時送信する。
+mecanum_command_force_delta = 0.20
+# AT速度値の細かい揺れを無視する幅。大きくすると静かになるが、微速操作は鈍る。
+mecanum_command_hysteresis_counts = 220
+# 前後反転する時、これ以下の逆向き値はいったん停止へ吸着する。
+mecanum_command_reverse_guard_counts = 420
 # 左スティックを上へ倒した時に前進するよう、前後入力だけを反転する。
 # 前後が再び逆なら True / False を切り替える。
 mecanum_invert_forward_input = True

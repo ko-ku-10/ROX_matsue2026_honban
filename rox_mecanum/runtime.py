@@ -40,6 +40,10 @@ class RobotRuntime:
             speed_span=_speed_span(hensuu.mecanum_speed_percent),
             acceleration_per_second=hensuu.mecanum_acceleration_percent_per_sec / 100.0,
             deceleration_per_second=hensuu.mecanum_deceleration_percent_per_sec / 100.0,
+            command_minimum_interval=hensuu.mecanum_command_minimum_interval_sec,
+            command_force_delta=hensuu.mecanum_command_force_delta,
+            command_value_hysteresis_counts=hensuu.mecanum_command_hysteresis_counts,
+            command_reverse_guard_counts=hensuu.mecanum_command_reverse_guard_counts,
         )
         servos = open_servos(transport=transport)
         try:

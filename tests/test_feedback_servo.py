@@ -128,6 +128,24 @@ class FeedbackServoTests(unittest.TestCase):
         # set_home_radians() の安全停止以外、命令なしで速度出力を出さない。
         self.assertEqual(motor.speeds, [(0.0, True)])
 
+    def test_mech_pos_ignores_one_turn_difference_after_power_cycle(self):
+        motor = FakeMotor()
+        servo = EncoderPositionServo(motor, PositionServoConfig(-360, 360, 100))
+        # 実機で同一位置が +0.0029rad と +6.2812rad になったケース。
+        servo.set_home_radians(0.0029)
+        servo.update_radians(6.2812, 1.0)
+        # 差は約1回転なので、原点から -0.28°程度として扱う。
+        self.assertAlmostEqual(servo.read(), -0.28, delta=0.05)
+
+    def test_mech_pos_stays_continuous_while_crossing_one_turn_boundary(self):
+        motor = FakeMotor()
+        servo = EncoderPositionServo(motor, PositionServoConfig(-360, 360, 100))
+        servo.set_home_radians(0.0)
+        servo.update_radians(3.0, 1.0)
+        servo.update_radians(-3.0, 1.1)
+        # +πを越えても -171°へ飛ばず、約+188°として連続する。
+        self.assertAlmostEqual(servo.read(), 188.1, delta=0.2)
+
     def test_unverified_legacy_feedback_never_drives_pid(self):
         motor = FakeMotor()
         servo = EncoderPositionServo(motor, PositionServoConfig(-90, 90, 100, kp=0.02))

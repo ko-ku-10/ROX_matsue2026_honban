@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from time import monotonic, sleep
 from threading import Lock
-from typing import Mapping, Protocol
+from typing import Callable, Mapping, Protocol
 
 from .mecanum import MecanumMixer, MotionCommand, WheelSpeeds
 
@@ -35,8 +35,9 @@ class ByteTransport(Protocol):
 def build_enable_frame(motor_id: int) -> bytes:
     """指定モーターを有効化する17バイトの AT フレームを作る。"""
     return bytes((
-        0x41, 0x54, 0x20, 0x07, 0xE8, _motor_id(motor_id),
-        0x08, 0x00, 0xC4, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0D, 0x0A,
+        # 公式サンプルと同じ Communication Type 3 (enable)。
+        0x41, 0x54, 0x18, 0x07, 0xE8, _motor_id(motor_id),
+        0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0D, 0x0A,
     ))
 
 
@@ -54,11 +55,43 @@ def build_velocity_frame(
 ) -> bytes:
     """正規化速度を指定する17バイトの AT フレームを作る。"""
     value = normalized_to_at_value(speed, speed_span)
+    return build_velocity_value_frame(motor_id, value)
+
+
+def build_velocity_value_frame(motor_id: int, value: int) -> bytes:
+    """従来のType 18速度パラメータ書込みフレームを作る。
+
+    catch/liftの位置PIDはこの形式を引き続き使用する。足回りには、公式の
+    ``build_mecanum_motion_control_value_frame`` を使う。
+    """
+    value = max(0, min(0xFFFF, int(value)))
     direction = 0x00 if value == AT_NEUTRAL_VALUE else 0x01
     return bytes((
         0x41, 0x54, 0x90, 0x07, 0xE8, _motor_id(motor_id),
         0x08, 0x05, 0x70, 0x00, 0x00, 0x07, direction,
         (value >> 8) & 0xFF, value & 0xFF, 0x0D, 0x0A,
+    ))
+
+
+def build_mecanum_motion_control_value_frame(motor_id: int, value: int) -> bytes:
+    """公式サンプルと同じ足回り用Type 1モーション制御フレームを作る。
+
+    位置・トルクは中立、Kp=0、Kdは公式サンプル値に固定する。速度値の
+    ヒステリシスと送信間隔を組み合わせ、微小な往復指令によるギア鳴きと
+    カタつきを抑える。
+    """
+    value = max(0, min(0xFFFF, int(value)))
+    position_value = AT_NEUTRAL_VALUE
+    kp_value = 0x0000
+    kd_value = 0x1999
+    return bytes((
+        0x41, 0x54, 0x0B, 0xFF, 0xF8, _motor_id(motor_id),
+        0x08,
+        (position_value >> 8) & 0xFF, position_value & 0xFF,
+        (value >> 8) & 0xFF, value & 0xFF,
+        (kp_value >> 8) & 0xFF, kp_value & 0xFF,
+        (kd_value >> 8) & 0xFF, kd_value & 0xFF,
+        0x0D, 0x0A,
     ))
 
 
@@ -116,7 +149,16 @@ class ATMotor:
     motor_id: int
     speed_span: int = AT_NEUTRAL_VALUE
     zero_hold_band: float = 0.06
+    # 速度値からATフレームを作る関数。足回りだけ公式Type 1へ差し替える。
+    velocity_value_frame_builder: Callable[[int, int], bytes] = build_velocity_value_frame
+    # 0なら従来どおり。足回りだけ小刻みな再送を抑える。
+    minimum_send_interval: float = 0.0
+    force_send_delta: float = 1.0
+    value_hysteresis_counts: int = 0
+    reverse_guard_counts: int = 0
     _last_speed: float | None = field(default=None, init=False, repr=False)
+    _last_value: int = field(default=AT_NEUTRAL_VALUE, init=False, repr=False)
+    _last_sent_at: float = field(default=0.0, init=False, repr=False)
 
     def enable(self) -> None:
         self.transport.write(build_enable_frame(self.motor_id))
@@ -126,10 +168,44 @@ class ATMotor:
         speed = max(-1.0, min(1.0, float(speed)))
         if abs(speed) < self.zero_hold_band:
             speed = 0.0
-        if not force and speed == self._last_speed:
+
+        target_value = normalized_to_at_value(speed, self.speed_span)
+        current_offset = self._last_value - AT_NEUTRAL_VALUE
+        target_offset = target_value - AT_NEUTRAL_VALUE
+
+        # 反転直後の小さな逆向き指令は中立へ吸着する。スティック中央の
+        # わずかな揺れで前後を往復し、ギアがガタガタ鳴るのを防ぐ。
+        if (
+            not force
+            and current_offset * target_offset < 0
+            and abs(target_offset) < self.reverse_guard_counts
+        ):
+            target_value = AT_NEUTRAL_VALUE
+
+        # AT整数値の境界付近で起こる細かい書換えを吸収する。
+        if (
+            not force
+            and self.value_hysteresis_counts > 0
+            and abs(target_value - self._last_value) < self.value_hysteresis_counts
+        ):
+            target_value = self._last_value
+
+        sent_speed = (target_value - AT_NEUTRAL_VALUE) / max(1.0, float(self.speed_span))
+        now = monotonic()
+        if (
+            not force
+            and self._last_speed is not None
+            and self.minimum_send_interval > 0.0
+            and now - self._last_sent_at < self.minimum_send_interval
+            and abs(sent_speed - self._last_speed) < self.force_send_delta
+        ):
             return
-        self.transport.write(build_velocity_frame(self.motor_id, speed, self.speed_span))
-        self._last_speed = speed
+        if not force and target_value == self._last_value:
+            return
+        self.transport.write(self.velocity_value_frame_builder(self.motor_id, target_value))
+        self._last_speed = sent_speed
+        self._last_value = target_value
+        self._last_sent_at = monotonic()
 
     def stop(self) -> None:
         self.set_velocity(0.0, force=True)
@@ -148,6 +224,10 @@ class MecanumRobot:
         speed_span: int = AT_NEUTRAL_VALUE,
         acceleration_per_second: float | None = None,
         deceleration_per_second: float | None = None,
+        command_minimum_interval: float = 0.05,
+        command_force_delta: float = 0.20,
+        command_value_hysteresis_counts: int = 220,
+        command_reverse_guard_counts: int = 420,
     ) -> None:
         missing = {"FL", "FR", "RL", "RR"} - set(motor_ids)
         if missing:
@@ -156,6 +236,10 @@ class MecanumRobot:
             raise ValueError("acceleration_per_second は0より大きくしてください")
         if deceleration_per_second is not None and deceleration_per_second <= 0.0:
             raise ValueError("deceleration_per_second は0より大きくしてください")
+        if command_minimum_interval < 0.0 or command_force_delta < 0.0:
+            raise ValueError("メカナムの送信間隔と強制送信差分は0以上にしてください")
+        if command_value_hysteresis_counts < 0 or command_reverse_guard_counts < 0:
+            raise ValueError("メカナムのヒステリシスと反転ガードは0以上にしてください")
         self.mixer = mixer or MecanumMixer()
         self.motor_directions = dict(motor_directions)
         # Noneなら従来どおり即座に速度を変える。実機では加速制限を指定する。
@@ -167,7 +251,16 @@ class MecanumRobot:
         self._last_wheel_speeds = {name: 0.0 for name in ("FL", "FR", "RL", "RR")}
         self._last_drive_at: float | None = None
         self.motors = {
-            name: ATMotor(transport, motor_ids[name], speed_span=speed_span)
+            name: ATMotor(
+                transport,
+                motor_ids[name],
+                speed_span=speed_span,
+                velocity_value_frame_builder=build_mecanum_motion_control_value_frame,
+                minimum_send_interval=command_minimum_interval,
+                force_send_delta=command_force_delta,
+                value_hysteresis_counts=command_value_hysteresis_counts,
+                reverse_guard_counts=command_reverse_guard_counts,
+            )
             for name in ("FL", "FR", "RL", "RR")
         }
 

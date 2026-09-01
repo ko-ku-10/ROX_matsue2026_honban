@@ -35,7 +35,9 @@ from .serial_at import (
     PySerialTransport,
     at_address_from_can_id,
     build_enable_frame,
+    build_mecanum_motion_control_value_frame,
     build_velocity_frame,
+    build_velocity_value_frame,
     normalized_to_at_value,
 )
 from .timed_servo import TimedServo, TimedServoConfig
@@ -77,7 +79,9 @@ __all__ = [
     "PositionServoConfig",
     "WheelSpeeds",
     "build_enable_frame",
+    "build_mecanum_motion_control_value_frame",
     "build_velocity_frame",
+    "build_velocity_value_frame",
     "backward",
     "forward",
     "normalized_to_at_value",

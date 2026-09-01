@@ -8,6 +8,7 @@ from rox_mecanum import (
     MotionCommand,
     at_address_from_can_id,
     build_enable_frame,
+    build_mecanum_motion_control_value_frame,
     build_velocity_frame,
     normalized_to_at_value,
 )
@@ -34,11 +35,31 @@ class SerialAtTests(unittest.TestCase):
         self.assertEqual(frame[13:15], AT_NEUTRAL_VALUE.to_bytes(2, "big"))
         self.assertEqual(normalized_to_at_value(2.0), 0xFFFF - 1)
 
+    def test_enable_and_mecanum_frame_match_official_sample(self) -> None:
+        self.assertEqual(
+            build_enable_frame(0x0C),
+            bytes.fromhex("41 54 18 07 e8 0c 08 00 00 00 00 00 00 00 00 0d 0a"),
+        )
+        self.assertEqual(
+            build_mecanum_motion_control_value_frame(0x0C, 0x7FFF),
+            bytes.fromhex("41 54 0b ff f8 0c 08 7f ff 7f ff 00 00 19 99 0d 0a"),
+        )
+
+    def test_mecanum_hysteresis_suppresses_small_at_value_changes(self) -> None:
+        transport = FakeTransport()
+        robot = MecanumRobot(transport, command_value_hysteresis_counts=220)
+        motor = robot.motors["FL"]
+        motor.set_velocity(0.50)
+        writes_after_first = len(transport.frames)
+        motor.set_velocity(0.501)
+        self.assertEqual(len(transport.frames), writes_after_first)
+
     def test_robot_uses_motor_orientation_from_original_program(self) -> None:
         transport = FakeTransport()
         robot = MecanumRobot(transport)
         robot.drive(MotionCommand(forward=0.5))
-        values = [int.from_bytes(frame[13:15], "big") for frame in transport.frames]
+        # 公式Type 1フレームでは速度値はbyte 9-10。
+        values = [int.from_bytes(frame[9:11], "big") for frame in transport.frames]
         self.assertEqual(values, [
             normalized_to_at_value(0.5),
             normalized_to_at_value(-0.5),

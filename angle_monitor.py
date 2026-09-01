@@ -45,7 +45,8 @@ def main() -> None:
     print("=" * 56)
     print("  catch / lift の実測角度を表示します（読み取り専用）")
     print("  Ctrl+C で終了")
-    print("  raw_deg: RobStride内部のmechPosを度へ換算した値")
+    print("  raw_deg: RobStride内部のmechPosを度へ換算した値（電源投入で360度単位にずれる）")
+    print("  phase_deg: 1回転内へ丸めた角度（電源を入れ直しても原点保存に使える値）")
     print("  relative_deg: このプログラムを起動した位置からの角度差")
     print("=" * 56)
 
@@ -71,10 +72,11 @@ def main() -> None:
                         lines.append(f"{name}: 応答待ち")
                         continue
                     raw_deg = degrees(current_rad[name])
+                    phase_deg = (raw_deg + 180.0) % 360.0 - 180.0
                     relative_deg = degrees(current_rad[name] - start_rad[name])
                     lines.append(
                         f"{name}: raw={current_rad[name]:+9.4f} rad "
-                        f"({raw_deg:+9.2f} deg)  "
+                        f"({raw_deg:+9.2f} deg) phase={phase_deg:+8.2f} deg  "
                         f"開始位置から {relative_deg:+8.2f} deg"
                     )
                 print(" | ".join(lines))

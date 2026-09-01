@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from math import degrees, isfinite
+from math import atan2, cos, degrees, isfinite, pi, sin
 from struct import unpack
 from time import monotonic
 from typing import Mapping
@@ -169,6 +169,10 @@ class EncoderPositionServo:
         self.current_angle: float | None = None
         self._home_unwrapped: int | None = None
         self._home_position_rad: float | None = None
+        # mechPosは電源投入で回転回数だけ±2πずれることがある。
+        # 1回転内の位相と、実行中の連続角度を分けて扱う。
+        self._last_position_phase: float | None = None
+        self._unwrapped_position_rad: float | None = None
         self._last_raw: int | None = None
         self._unwrapped = 0
         self._last_error = 0.0
@@ -192,6 +196,8 @@ class EncoderPositionServo:
         self.current_angle = float(angle)
         self.target_angle = self._limit(angle)
         self._home_position_rad = None
+        self._last_position_phase = None
+        self._unwrapped_position_rad = None
         self._last_error = 0.0
         self._last_update = None
         self.last_feedback_at = None
@@ -204,7 +210,12 @@ class EncoderPositionServo:
         """RobStride正式のmechPos[rad]を基準に、現在位置を登録する。"""
         if not isfinite(position_rad):
             raise ValueError("position_rad は有限の値にしてください")
-        self._home_position_rad = float(position_rad)
+        # 電源を入れ直すと同じ物理位置が 0rad と 2πrad のように変わる。
+        # 原点は1回転内の位相として保存し、±2πの差は無視する。
+        phase = _normalize_phase_rad(position_rad)
+        self._home_position_rad = phase
+        self._last_position_phase = phase
+        self._unwrapped_position_rad = phase
         self._home_unwrapped = None
         self._last_raw = None
         self.current_angle = float(angle)
@@ -309,7 +320,18 @@ class EncoderPositionServo:
             return None
         if not isfinite(position_rad):
             return None
-        self.current_angle = degrees(float(position_rad) - self._home_position_rad)
+        phase = _normalize_phase_rad(position_rad)
+        if self._last_position_phase is None or self._unwrapped_position_rad is None:
+            # 起動直後は保存済み原点に最も近い1回転として解釈する。
+            self._last_position_phase = self._home_position_rad
+            self._unwrapped_position_rad = self._home_position_rad
+
+        # 例: 6.2812rad → 0.0029rad のように境界をまたいでも、
+        # 差分を-0.0049radとして扱う。実行中は複数回転も連続追跡できる。
+        delta = _shortest_phase_delta_rad(phase - self._last_position_phase)
+        self._unwrapped_position_rad += delta
+        self._last_position_phase = phase
+        self.current_angle = degrees(self._unwrapped_position_rad - self._home_position_rad)
         return self._update_control(now)
 
     def update_feedback(self, feedback: EncoderFeedback) -> float | None:
@@ -428,6 +450,16 @@ def _decode_mech_pos(data: bytes) -> float | None:
         return None
     position_rad = unpack("<f", data[4:8])[0]
     return position_rad if isfinite(position_rad) else None
+
+
+def _normalize_phase_rad(angle_rad: float) -> float:
+    """任意のrad値を -π〜+π の1回転内位相へ正規化する。"""
+    return atan2(sin(float(angle_rad)), cos(float(angle_rad)))
+
+
+def _shortest_phase_delta_rad(delta_rad: float) -> float:
+    """位相差を、最短方向の -π〜+π の差分へ正規化する。"""
+    return _normalize_phase_rad(delta_rad)
 
 
 def _can_id_from_at_address(address: int) -> int:
