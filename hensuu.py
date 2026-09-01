@@ -16,9 +16,17 @@ dualsense_connect_timeout_sec = 30.0
 
 # メカナム
 mecanum_speed_percent = 100       # 最高速度（0〜100）
+# スティックを少し倒した時に勝手に動かない範囲。大きいほどブレに強い。
+mecanum_deadzone = 0.08
+# 1.0ならスティック量と速度が直線的。1.6なら中央付近を細かく操作でき、
+# 最後まで倒した時の最高速度は100%のまま。
+mecanum_response_exponent = 1.6
 # 急発進を抑える加速の速さ。300なら停止→100%まで約0.33秒。
 # 小さいほどゆっくり、大きいほどキビキビ加速する。
 mecanum_acceleration_percent_per_sec = 300.0
+# スティックを戻した時の減速の速さ。加速より大きくし、止まりたい時は早く止まる。
+# 800なら100%→停止まで約0.13秒。急すぎるなら小さくする。
+mecanum_deceleration_percent_per_sec = 800.0
 # 左スティックを上へ倒した時に前進するよう、前後入力だけを反転する。
 # 前後が再び逆なら True / False を切り替える。
 mecanum_invert_forward_input = True

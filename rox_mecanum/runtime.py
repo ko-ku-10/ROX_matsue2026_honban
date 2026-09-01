@@ -39,6 +39,7 @@ class RobotRuntime:
             mixer=MecanumMixer(rotation_gain=0.22),
             speed_span=_speed_span(hensuu.mecanum_speed_percent),
             acceleration_per_second=hensuu.mecanum_acceleration_percent_per_sec / 100.0,
+            deceleration_per_second=hensuu.mecanum_deceleration_percent_per_sec / 100.0,
         )
         servos = open_servos(transport=transport)
         try:
@@ -71,7 +72,8 @@ class RobotRuntime:
                 mecanum=mecanum,
                 servos=servos,
                 mapping=DualSenseMotionMapping(
-                    deadzone=0.08,
+                    deadzone=hensuu.mecanum_deadzone,
+                    response_exponent=hensuu.mecanum_response_exponent,
                     rotation_enable=Button.R2 if hensuu.mecanum_rotation_requires_r2 else None,
                     invert_forward=hensuu.mecanum_invert_forward_input,
                 ),

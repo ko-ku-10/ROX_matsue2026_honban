@@ -56,3 +56,18 @@ class SerialAtTests(unittest.TestCase):
 
         self.assertEqual(status["acceleration_limit_per_sec"], 2.0)
         self.assertEqual(set(status["wheel_speed_commands"]), {"FL", "FR", "RL", "RR"})
+
+    def test_braking_can_be_faster_than_acceleration(self) -> None:
+        transport = FakeTransport()
+        robot = MecanumRobot(
+            transport,
+            acceleration_per_second=1.0,
+            deceleration_per_second=10.0,
+        )
+        robot._last_wheel_speeds = {"FL": 0.5, "FR": 0.5, "RL": 0.5, "RR": 0.5}
+        robot._last_drive_at = None
+
+        stopped = robot._apply_acceleration_limit({"FL": 0.0, "FR": 0.0, "RL": 0.0, "RR": 0.0})
+
+        # 最初の周期は0.02秒。減速10.0なら0.20だけ減速できる。
+        self.assertAlmostEqual(stopped.front_left, 0.3)

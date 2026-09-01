@@ -147,16 +147,23 @@ class MecanumRobot:
         mixer: MecanumMixer | None = None,
         speed_span: int = AT_NEUTRAL_VALUE,
         acceleration_per_second: float | None = None,
+        deceleration_per_second: float | None = None,
     ) -> None:
         missing = {"FL", "FR", "RL", "RR"} - set(motor_ids)
         if missing:
             raise ValueError(f"motor_ids is missing: {sorted(missing)}")
         if acceleration_per_second is not None and acceleration_per_second <= 0.0:
             raise ValueError("acceleration_per_second は0より大きくしてください")
+        if deceleration_per_second is not None and deceleration_per_second <= 0.0:
+            raise ValueError("deceleration_per_second は0より大きくしてください")
         self.mixer = mixer or MecanumMixer()
         self.motor_directions = dict(motor_directions)
         # Noneなら従来どおり即座に速度を変える。実機では加速制限を指定する。
         self.acceleration_per_second = acceleration_per_second
+        # 未指定なら従来と同じく、加速と減速は同じ速さにする。
+        self.deceleration_per_second = (
+            acceleration_per_second if deceleration_per_second is None else deceleration_per_second
+        )
         self._last_wheel_speeds = {name: 0.0 for name in ("FL", "FR", "RL", "RR")}
         self._last_drive_at: float | None = None
         self.motors = {
@@ -201,6 +208,7 @@ class MecanumRobot:
         return {
             "wheel_speed_commands": dict(self._last_wheel_speeds),
             "acceleration_limit_per_sec": self.acceleration_per_second,
+            "deceleration_limit_per_sec": self.deceleration_per_second,
         }
 
     def _apply_acceleration_limit(self, target: Mapping[str, float]) -> WheelSpeeds:
@@ -211,12 +219,22 @@ class MecanumRobot:
         now = monotonic()
         # 最初の1回は制御周期50Hzを仮定する。起動から時間が経っていても急発進しない。
         dt = 0.02 if self._last_drive_at is None else min(0.10, now - self._last_drive_at)
-        maximum_change = self.acceleration_per_second * max(0.0, dt)
         values: dict[str, float] = {}
 
         for name in ("FL", "FR", "RL", "RR"):
             previous = self._last_wheel_speeds[name]
-            difference = target[name] - previous
+            wanted = target[name]
+
+            # 前後・左右・旋回を急に反転させない。まず素早く0まで減速し、
+            # 次の周期から反対方向へ滑らかに発進する。
+            reversing = previous * wanted < 0.0
+            if reversing:
+                wanted = 0.0
+
+            slowing_down = abs(wanted) < abs(previous) or reversing
+            rate = self.deceleration_per_second if slowing_down else self.acceleration_per_second
+            maximum_change = rate * max(0.0, dt)
+            difference = wanted - previous
             change = max(-maximum_change, min(maximum_change, difference))
             values[name] = previous + change
 
