@@ -39,7 +39,14 @@ from .serial_at import (
     normalized_to_at_value,
 )
 from .timed_servo import TimedServo, TimedServoConfig
-from .feedback_servo import ATEncoderReader, EncoderFeedback, EncoderPositionServo, PositionServoConfig
+from .feedback_servo import (
+    ATEncoderReader,
+    EncoderFeedback,
+    EncoderPositionServo,
+    PositionServoConfig,
+    build_save_motor_data_command,
+    build_set_mechanical_zero_command,
+)
 from .autonomy import ControlMode, ModeController, TimedMotion, add_manual_command, face_target_command
 from .vision import AprilTagDetector, OpenCVSingleCamera, OpenCVStereoCamera, RDKMIPICamera, RDKMIPIStereoCamera, TagObservation, TagStore, midpoint, open_camera, open_stereo_camera, robot_center_horizontal_error
 from .runtime import RobotRuntime
@@ -75,6 +82,8 @@ __all__ = [
     "EncoderFeedback",
     "EncoderPositionServo",
     "PositionServoConfig",
+    "build_save_motor_data_command",
+    "build_set_mechanical_zero_command",
     "WheelSpeeds",
     "build_enable_frame",
     "build_velocity_frame",
