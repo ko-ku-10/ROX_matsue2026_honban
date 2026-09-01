@@ -105,6 +105,7 @@ def main() -> None:
         while True:
             loop_started = time.monotonic()
             state = runtime.controller.read()
+            robot_actions.update_lights()
 
             if state.was_pressed(Button.OPTIONS):
                 print("OPTIONS: 非常停止")
