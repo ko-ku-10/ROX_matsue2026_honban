@@ -28,22 +28,78 @@ PURPLE = (180, 0, 255)
 RED = (255, 0, 0)
 
 
+def fill(color: tuple[int, int, int]) -> list[tuple[int, int, int]]:
+    """6個すべてを同じ色にする短縮記法。"""
+    return [color] * LED_COUNT
+
+
+def one(index: int, color: tuple[int, int, int]) -> list[tuple[int, int, int]]:
+    """指定した1個だけを光らせる短縮記法。先頭は0、最後は5。"""
+    return [color if pixel == index else OFF for pixel in range(LED_COUNT)]
+
+
+def timeline(
+    seconds: float,
+    frames: list[tuple[float, list[tuple[int, int, int]]]],
+    *,
+    loop: bool = True,
+) -> list[tuple[int, int, int]]:
+    """時間指定の色リストから、現在表示する1コマを返す。
+
+    ``frames`` の書き方は ``[(秒数, LED6個の色), ...]``。
+    ``loop=True`` なら最後まで行った後に最初へ戻り、Falseなら最後の色で止まる。
+    """
+    valid = [(float(duration), list(colors)) for duration, colors in frames if float(duration) > 0.0]
+    if not valid:
+        return fill(OFF)
+    total = sum(duration for duration, _colors in valid)
+    moment = float(seconds) % total if loop else min(float(seconds), total - 0.000001)
+    for duration, colors in valid:
+        if moment < duration:
+            return colors
+        moment -= duration
+    return valid[-1][1]
+
+
 # ==================================================
 # ここに動作ごとの光り方を書く。
 # 引数 ``seconds`` は、その動作が始まってからの秒数。
 # 必ず6個ぶんの色を ``[色1, 色2, ...]`` で返す。
 # ==================================================
+# このように時間と色を並べるだけで、自由な演出を書ける。
+# 例: [(0.1, fill(RED)), (0.1, fill(OFF)), (0.5, fill(PURPLE))]
+#       0.1秒赤 → 0.1秒消灯 → 0.5秒紫。
+
+# 待機中の1周する青い光。最後まで行くと先頭から繰り返す。
+STANDBY_FRAMES = [(0.12, one(index, BLUE)) for index in range(LED_COUNT)]
+
+# 地面走行中の緑の往復。
+GROUND_FRAMES = [(0.10, one(index, GREEN)) for index in (0, 1, 2, 3, 4, 5, 4, 3, 2, 1)]
+
+# 発射準備中の紫点滅。最後まで行くと繰り返す。
+READY_FRAMES = [(0.25, fill(PURPLE)), (0.25, fill(OFF))]
+
+# 発射中の赤い流れ。loop=Falseなので、最後の消灯で止まる。
+FIRING_FRAMES = [
+    (0.06, one(0, RED)),
+    (0.06, one(1, RED)),
+    (0.06, one(2, RED)),
+    (0.06, one(3, RED)),
+    (0.06, one(4, RED)),
+    (0.06, one(5, RED)),
+    (0.10, fill(RED)),
+    (0.10, fill(OFF)),
+]
+
+
 def animation_standby(seconds: float) -> list[tuple[int, int, int]]:
     """待機: 青い光が左から右へ流れる。"""
-    point = int(seconds * 4) % LED_COUNT
-    return [BLUE if index == point else OFF for index in range(LED_COUNT)]
+    return timeline(seconds, STANDBY_FRAMES)
 
 
 def animation_ground(seconds: float) -> list[tuple[int, int, int]]:
     """地面走行: 緑が左右へ往復する。"""
-    order = [0, 1, 2, 3, 4, 5, 4, 3, 2, 1]
-    point = order[int(seconds * 5) % len(order)]
-    return [GREEN if index == point else OFF for index in range(LED_COUNT)]
+    return timeline(seconds, GROUND_FRAMES)
 
 
 def animation_lifting(seconds: float, completed_steps: int) -> list[tuple[int, int, int]]:
@@ -58,13 +114,12 @@ def animation_lifting(seconds: float, completed_steps: int) -> list[tuple[int, i
 
 def animation_ready(seconds: float) -> list[tuple[int, int, int]]:
     """発射準備: 紫が点滅する。"""
-    return [PURPLE if int(seconds * 3) % 2 == 0 else OFF] * LED_COUNT
+    return timeline(seconds, READY_FRAMES)
 
 
 def animation_firing(seconds: float) -> list[tuple[int, int, int]]:
     """発射: 赤が前から後ろへ流れる。"""
-    point = int(seconds * 16) % LED_COUNT
-    return [RED if index <= point else OFF for index in range(LED_COUNT)]
+    return timeline(seconds, FIRING_FRAMES, loop=False)
 
 
 class RobotLights:
