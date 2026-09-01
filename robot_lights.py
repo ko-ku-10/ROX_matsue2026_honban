@@ -12,7 +12,8 @@ LED_COUNT = 6
 # RDK X5のSPI1 MOSI（40pinの物理Pin 19）を使う。
 # LEDテープの入力側DINへ、5Vレベルシフタを経由してつなぐ。
 LED_SPI_BUS = 0
-LED_SPI_DEVICE = 0
+# SPIバス0の device 1 を使う: /dev/spidev0.1
+LED_SPI_DEVICE = 1
 LED_SPI_SPEED_HZ = 2_400_000
 # 配線・SPI確認後にTrueへ変更すると、実際のLEDへ送信する。
 LED_OUTPUT_ENABLED = False
