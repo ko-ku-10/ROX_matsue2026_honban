@@ -12,45 +12,6 @@ from .serial_at import ATMotor, PySerialTransport
 
 ENCODER_REGISTER = 0x7019
 COUNTS_PER_REV = 65536
-_HOST_CAN_ID = 0xFD
-
-
-def build_set_mechanical_zero_command(motor_address: int) -> bytes:
-    """現在位置をEDULITE05の機械0度にするType 6 ATフレームを作る。
-
-    これはモーターを動かす指令ではない。電源断後にも残すには、直後に
-    :func:`build_save_motor_data_command` (Type 22) を一度だけ送る必要がある。
-    """
-    return _build_private_command(motor_address, communication_type=0x06)
-
-
-def build_save_motor_data_command(motor_address: int) -> bytes:
-    """EDULITE05の設定を本体フラッシュへ保存するType 22 ATフレームを作る。
-
-    フラッシュ書込みなので、原点を変更する時だけ使う。通常のPID周期や
-    GAME起動時に送ってはいけない。
-    """
-    return _build_private_command(motor_address, communication_type=0x16)
-
-
-def _build_private_command(motor_address: int, *, communication_type: int) -> bytes:
-    """公式private protocolの空データTypeコマンドをATフレームにする。"""
-    if not 0 <= communication_type <= 0x1F:
-        raise ValueError("communication_type は0〜31の範囲にしてください")
-    motor_id = _can_id_from_at_address(motor_address)
-    # 既にmechPos読取りで実機確認済みの ``type | host 0xFD | motor ID`` 形式。
-    ext_can_id = (communication_type << 24) | (_HOST_CAN_ID << 16) | motor_id
-    at_extended_id = (ext_can_id << 3) | 0x04
-    return bytes((
-        0x41, 0x54,
-        (at_extended_id >> 24) & 0xFF,
-        (at_extended_id >> 16) & 0xFF,
-        (at_extended_id >> 8) & 0xFF,
-        at_extended_id & 0xFF,
-        0x08,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x0D, 0x0A,
-    ))
 
 
 def build_encoder_read_command(motor_address: int) -> bytes:
