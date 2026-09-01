@@ -16,8 +16,8 @@ LED_COUNT = 6
 LED_SPI_BUS = 1
 LED_SPI_DEVICE = 1
 LED_SPI_SPEED_HZ = 2_400_000
-# 配線・SPI確認後にTrueへ変更すると、実際のLEDへ送信する。
-LED_OUTPUT_ENABLED = False
+# 実機のSPI1.1へ実際にLEDデータを送信する。
+LED_OUTPUT_ENABLED = True
 
 # 色は (赤, 緑, 青) の順。各値は 0〜255。
 OFF = (0, 0, 0)
