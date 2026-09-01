@@ -1,9 +1,4 @@
-"""ロボット動作に連動する6個のLEDテープ演出。
-
-今は未配線なので、LED_DATA_PIN は仮のGPIO番号で、実機送信は無効である。
-各GAMEや機構の動きはこのファイルの関数だけを呼ぶため、配線が決まったら
-``show()`` の中へWS2812用の送信処理を追加すれば、GAME側を直さず使える。
-"""
+"""RDK X5のSPIで、6個のWS2812系LEDテープを動作に連動させる。"""
 
 from __future__ import annotations
 
@@ -14,9 +9,12 @@ from time import monotonic
 # ここを自由に書き換える。LEDテープは6個。
 # ==================================================
 LED_COUNT = 6
-# DINへつなぐ予定の仮GPIO番号。配線が決まったらここだけ変更する。
-LED_DATA_PIN = 22
-# 未配線の間はFalseのまま。今は光らせず、ターミナルへ状態だけを表示する。
+# RDK X5のSPI1 MOSI（40pinの物理Pin 19）を使う。
+# LEDテープの入力側DINへ、5Vレベルシフタを経由してつなぐ。
+LED_SPI_BUS = 0
+LED_SPI_DEVICE = 0
+LED_SPI_SPEED_HZ = 2_400_000
+# 配線・SPI確認後にTrueへ変更すると、実際のLEDへ送信する。
 LED_OUTPUT_ENABLED = False
 
 # 色は (赤, 緑, 青) の順。各値は 0〜255。
@@ -59,6 +57,24 @@ def timeline(
             return colors
         moment -= duration
     return valid[-1][1]
+
+
+def encode_ws2812(pixels: list[tuple[int, int, int]]) -> bytes:
+    """RGB色を、SPI 2.4MHzで送れるWS2812信号へ変換する。
+
+    WS2812の1ビットをSPIの3ビットで表す。1=110、0=100。
+    WS2812はGRB順なので、設定で書くRGB順とはここで入れ替える。
+    """
+    data = bytearray()
+    for red, green, blue in pixels[:LED_COUNT]:
+        for value in (green, red, blue):
+            encoded = 0
+            for shift in range(7, -1, -1):
+                encoded = (encoded << 3) | (0b110 if (int(value) >> shift) & 1 else 0b100)
+            data.extend(encoded.to_bytes(3, "big"))
+    # 80us以上のLOWでWS2812へ表示更新を知らせる。
+    data.extend(b"\x00" * 32)
+    return bytes(data)
 
 
 # ==================================================
@@ -130,18 +146,45 @@ class RobotLights:
         self.pattern_name = "消灯"
         self._animation = lambda _seconds: [OFF] * LED_COUNT
         self._started_at = monotonic()
+        self._spi = None
+        self._last_output_error = ""
 
     def _show(self, pixels: list[tuple[int, int, int]]) -> None:
-        """LED6個の色を実機へ送る場所。未配線の間は何もしない。"""
+        """LED6個の色をSPI経由で実機へ送る。"""
         self.pixels = list(pixels[:LED_COUNT])
         while len(self.pixels) < LED_COUNT:
             self.pixels.append(OFF)
 
         if LED_OUTPUT_ENABLED:
-            # WS2812への実送信は、DINの接続方法が決まってからここへ追加する。
-            # 通常GPIOのON/OFFではWS2812の高速信号を正確に作れないため、
-            # 未確認の配線へ適当な信号を送らない。
-            pass
+            self._send_ws2812()
+
+    def _send_ws2812(self) -> None:
+        """RDK X5のSPI MOSIから、現在の6個の色を送る。"""
+        try:
+            if self._spi is None:
+                import spidev
+
+                self._spi = spidev.SpiDev()
+                self._spi.open(LED_SPI_BUS, LED_SPI_DEVICE)
+                self._spi.mode = 0
+                self._spi.max_speed_hz = LED_SPI_SPEED_HZ
+            self._spi.xfer2(list(encode_ws2812(self.pixels)))
+            self._last_output_error = ""
+        except Exception as error:  # pragma: no cover - RDK実機のSPI依存
+            # LED不調だけでロボット本体が停止しないよう、LEDを無効化して続行する。
+            message = str(error)
+            if message != self._last_output_error:
+                print(f"[LED] SPI送信失敗（LEDのみ無効）: {message}")
+                self._last_output_error = message
+            self.close()
+
+    def close(self) -> None:
+        """SPIを閉じる。次回の実行時には自動で開き直す。"""
+        if self._spi is not None:
+            try:
+                self._spi.close()
+            finally:
+                self._spi = None
 
     def set_animation(self, name: str, animation) -> None:
         """動作に対応する光り方を切り替える。"""

@@ -86,6 +86,7 @@ def all_off():
 def close_gpio():
     """GAME終了時のGPIO片付け。通常は自分で呼ばなくてよい。"""
     all_off()
+    lights.close()
     if GPIO is not None:
         for pin in _configured_pins.copy():
             GPIO.cleanup(pin)
