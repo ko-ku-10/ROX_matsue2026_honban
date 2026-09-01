@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import hensuu
 import robot_actions
 from rox_mecanum import Button, open_configured_dualsense
 from servos import open_servos
@@ -34,7 +35,8 @@ def main() -> None:
         controller = open_configured_dualsense()
         servos = open_servos()
         servos.attach()
-        servos.home_from_feedback()
+        servos.load_origins(hensuu.servo_origin_file)
+        servos.refresh_positions_from_feedback()
         servos.hold_all_current()
         servos.start_pid()
 

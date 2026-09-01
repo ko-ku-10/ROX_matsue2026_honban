@@ -154,7 +154,6 @@ def main() -> None:
         while True:
             loop_started = time.monotonic()
             state = runtime.controller.read()
-            robot_actions.update_lights()
 
             # カメラ・Tag処理は別スレッド。手動中は映像表示だけにする。
             vision_worker.set_paused(

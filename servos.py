@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import json
 import time
 from dataclasses import dataclass
+from math import isfinite
+from pathlib import Path
 from threading import Event, Lock, Thread, current_thread
 
 import hensuu
@@ -69,6 +72,65 @@ class ServoMotors:
         """指定した機構の現在位置を0°として登録する。"""
         values = self.read_mech_positions(timeout_sec=timeout_sec, names=names)
         self.home_feedbacks(values)
+
+    def save_origins(self, file_path: str | Path) -> None:
+        """現在登録済みのcatch/lift原点をJSONファイルへ保存する。
+
+        原点はEDULITE 05の正式mechPos[rad]で保存する。まず ``home_to_stop()``
+        などで物理0度を登録してから呼ぶ。
+        """
+        origins: dict[str, float] = {}
+        for name in ("catch", "lift"):
+            position = self._servo(name).home_position_rad
+            if position is None or not isfinite(position):
+                raise RuntimeError(
+                    f"{name}の0度が未登録です。先にストッパー原点合わせをしてください"
+                )
+            origins[name] = float(position)
+
+        path = Path(file_path)
+        data = {
+            "format": "edulite05-mechpos-origin-v1",
+            "unit": "rad",
+            "catch": origins["catch"],
+            "lift": origins["lift"],
+        }
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = path.with_suffix(path.suffix + ".tmp")
+        temporary.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        temporary.replace(path)
+
+    def load_origins(self, file_path: str | Path) -> None:
+        """保存済みの0度を読み込む。モーターは動かさない。"""
+        path = Path(file_path)
+        if not path.is_file():
+            raise FileNotFoundError(
+                f"原点ファイルがありません: {path}。"
+                "一度だけ python3 set_servo_origins.py を実行してください"
+            )
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            if data.get("format") != "edulite05-mechpos-origin-v1":
+                raise ValueError("原点ファイルの形式が違います")
+            origins = {name: float(data[name]) for name in ("catch", "lift")}
+        except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError) as error:
+            raise RuntimeError(f"原点ファイルを読めません: {path}") from error
+
+        for name, position in origins.items():
+            if not isfinite(position):
+                raise RuntimeError(f"原点ファイルの{name}が不正です")
+            self._servo(name).set_home_radians(position)
+
+    def refresh_positions_from_feedback(
+        self,
+        timeout_sec: float = 1.0,
+        names: tuple[str, ...] = ("catch", "lift"),
+    ) -> None:
+        """保存済み原点を使って、現在角度を1回だけ更新する。モーターは動かない。"""
+        values = self.read_mech_positions(timeout_sec=timeout_sec, names=names)
+        now = time.monotonic()
+        for name in names:
+            self._servo(name).update_feedback(values[name])
 
     def read_mech_positions(
         self,

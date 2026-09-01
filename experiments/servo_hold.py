@@ -2,6 +2,7 @@
 
 import time
 
+import hensuu
 from rox_mecanum import Button, open_configured_dualsense
 from servos import open_servos
 
@@ -9,9 +10,10 @@ servos = open_servos()
 controller = open_configured_dualsense()
 
 try:
-    # 停止状態で有効化し、RobStrideから読んだ現在角度を0度として登録する。
+    # 保存済みの物理0度を使う。実行時の位置を0度へ書き換えない。
     servos.attach()
-    servos.home_from_feedback()
+    servos.load_origins(hensuu.servo_origin_file)
+    servos.refresh_positions_from_feedback()
 
     # 「今の位置」を目標にする。この命令時点では誤差が0なので動かない。
     servos.hold_all_current()

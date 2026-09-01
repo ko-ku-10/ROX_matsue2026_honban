@@ -27,7 +27,6 @@ def main() -> None:
 
         while True:
             state = controller.read()
-            robot_actions.update_lights()
 
             if state.was_pressed(Button.OPTIONS):
                 print("OPTIONS: 両方OFFにして終了")

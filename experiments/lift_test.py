@@ -21,9 +21,8 @@ def main() -> None:
         controller = open_configured_dualsense()
 
         servos.attach()
-        print("liftを現在の地面高さ（0度）に合わせてから Enter を押してください")
-        input()
-        servos.home_from_feedback()
+        servos.load_origins(hensuu.servo_origin_file)
+        servos.refresh_positions_from_feedback()
         # 移動時だけ、hensuu.pyで決めた低速上限を使う。
         servos.set_pid("lift", max_speed_percent=hensuu.mechanism_move_speed_percent)
         servos.hold_all_current()

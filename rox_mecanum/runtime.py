@@ -45,25 +45,12 @@ class RobotRuntime:
         try:
             mecanum.enable_all(retries=3, interval=0.05)
             servos.attach()
-            # catch/liftをそれぞれ機械ストッパーまで自動で動かし、mechPosの変化が
-            # 止まった位置を0度として登録する。保存済みの原点は使わない。
-            servos.home_to_stop(
-                "catch",
-                speed_percent=hensuu.catch_homing_speed_percent,
-                direction=hensuu.catch_homing_direction,
-                stillness_deg=hensuu.catch_homing_stillness_deg,
-                stillness_sec=hensuu.catch_homing_stillness_sec,
-                timeout_sec=hensuu.catch_homing_timeout_sec,
-            )
-            servos.home_to_stop(
-                "lift",
-                speed_percent=hensuu.lift_homing_speed_percent,
-                direction=hensuu.lift_homing_direction,
-                stillness_deg=hensuu.lift_homing_stillness_deg,
-                stillness_sec=hensuu.lift_homing_stillness_sec,
-                timeout_sec=hensuu.lift_homing_timeout_sec,
-            )
-            # 原点登録した現在位置を目標にしてからPIDを開始する。
+            # 保存済みのEDULITE 05 mechPos原点を使う。通常起動では、
+            # ストッパーへ押し付ける原点合わせを絶対にしない。
+            servos.load_origins(hensuu.servo_origin_file)
+            # 実際の現在角度を1回だけ読んでから、その場で保持を開始する。
+            # 原点は変えず、機構もこの読み取り中には動かない。
+            servos.refresh_positions_from_feedback()
             servos.hold_all_current()
             servos.start_pid()
             return cls(

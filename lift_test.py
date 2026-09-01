@@ -11,6 +11,7 @@ robot_actions.py の ball_lift_for_shot() と同じ動きを確認する。
 import time
 from types import SimpleNamespace
 
+import hensuu
 import robot_actions
 from servos import open_servos
 
@@ -19,9 +20,10 @@ servos = open_servos()
 runtime = SimpleNamespace(servos=servos)
 
 try:
-    # catch/liftだけを有効化し、今の実測角度を0度としてPIDを開始する。
+    # catch/liftだけを有効化し、保存済みの物理0度を使ってPIDを開始する。
     servos.attach()
-    servos.home_from_feedback()
+    servos.load_origins(hensuu.servo_origin_file)
+    servos.refresh_positions_from_feedback()
     servos.hold_all_current()
     servos.start_pid()
 

@@ -4,6 +4,11 @@
 serial_port = "/dev/ttyUSB0"
 serial_baud = 921600
 
+# catch/liftの物理0度を一度だけ保存するファイル。
+# 通常のGAME起動ではこの値を使うため、ストッパーへ毎回押し付けない。
+# 原点を作り直す時だけ ``python3 set_servo_origins.py`` を実行する。
+servo_origin_file = "servo_origins.json"
+
 # DualSenseの接続モード。
 # "connect_each_run": プログラム起動時に接続し、終了時にBluetoothを切断する（電池節約）。
 # "keep_connected": 終了時に切断しない。続けて別のGAME/実験を実行する時に使う。

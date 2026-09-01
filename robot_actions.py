@@ -8,8 +8,6 @@ CAN通信・PID・メカナムは書かなくてよいですが、lift/catch/GPI
 import time
 from dataclasses import dataclass
 
-from robot_lights import lights
-
 try:  # PC上で構文確認する時はHobot.GPIOが無くてもよい。
     import Hobot.GPIO as GPIO
 except ImportError:  # pragma: no cover - RDK X5実機依存
@@ -49,11 +47,6 @@ LIFT_MOVE_SPEED_PERCENT = 60
 _configured_pins = set()
 
 
-def update_lights():
-    """LEDアニメーションを1コマ進める。GAMEの操作ループから呼ばれる。"""
-    lights.update()
-
-
 def setup_gpio():
     """GAME起動時に1回だけ呼ばれる。シリンダーを戻した状態で開始する。"""
     if GPIO is None:
@@ -71,12 +64,8 @@ def setup_gpio():
     time.sleep(CYLINDER_SWITCH_OFF_SEC)
     GPIO.output(CYLINDER_RETRACT_PIN, GPIO.LOW)
     GPIO.output(CYLINDER_RETRACT_PIN, GPIO.LOW)
-    lights.standby()
-
-
 def all_off():
     """OPTIONS・例外・終了時に必ず呼ばれる。2個ともOFFにする。"""
-    lights.off()
     if GPIO is None:
         return
     for pin in _configured_pins:
@@ -86,7 +75,6 @@ def all_off():
 def close_gpio():
     """GAME終了時のGPIO片付け。通常は自分で呼ばなくてよい。"""
     all_off()
-    lights.close()
     if GPIO is not None:
         for pin in _configured_pins.copy():
             GPIO.cleanup(pin)
@@ -107,7 +95,6 @@ def game1_start_pose(runtime):
     servos = runtime.servos
     servos.lift.write(lift_orosu)
     servos.catch.write(catch_hozi)
-    lights.ground()
 
 
 def game2_ground_pose(runtime):
@@ -115,7 +102,6 @@ def game2_ground_pose(runtime):
     servos = runtime.servos
     servos.lift.write(lift_orosu)
     servos.catch.write(catch_hozi)
-    lights.ground()
 
 
 def is_within_move_tolerance(servo):
@@ -169,7 +155,6 @@ class BallLiftAction:
         self.normal_lift_speed_percent = self.runtime.servos.lift.config.max_speed * 100.0
         self.runtime.servos.set_pid("lift", max_speed_percent=LIFT_MOVE_SPEED_PERCENT)
         self.step_started = time.monotonic()
-        lights.lifting(self.step)
         self._send_step_target()
 
     def _steps(self):
@@ -197,21 +182,17 @@ class BallLiftAction:
             self.step += 1
             if self.step >= len(self._steps()):
                 self.finish()
-                lights.ready_to_fire()
                 print("持上げ動作が完了しました")
                 return True
             self.step_started = time.monotonic()
-            lights.lifting(self.step)
             self._send_step_target()
         elif time.monotonic() - self.step_started >= SERVO_MOVE_TIMEOUT_SEC:
             print(f"{name}: 到達確認なし。次の動作へ進みます")
             self.step += 1
             if self.step >= len(self._steps()):
                 self.finish()
-                lights.ready_to_fire()
                 return True
             self.step_started = time.monotonic()
-            lights.lifting(self.step)
             self._send_step_target()
         return False
 
@@ -236,7 +217,6 @@ def cancel_ball_lift_for_shot(action, runtime):
     action.cancel()
     runtime.servos.lift.write(lift_orosu)
     runtime.servos.catch.write(catch_hozi)
-    lights.ground()
 
 
 def ball_lift_for_shot(runtime):
@@ -249,7 +229,6 @@ def ball_lift_for_shot(runtime):
 def ball_fire(runtime):
     """GAME2・GAME3共通: 発射後、戻す側をONのままにして戻り位置を保持する。"""
     # 戻す側を先にOFFにし、両方OFFの時間を作ってから発射する。
-    lights.firing()
     GPIO.output(CYLINDER_RETRACT_PIN, GPIO.LOW)
     time.sleep(CYLINDER_SWITCH_OFF_SEC)
     GPIO.output(CYLINDER_EXTEND_PIN, GPIO.HIGH)
@@ -263,7 +242,6 @@ def ball_fire(runtime):
     # 戻す側はOFFにしない。待機中もシリンダーを戻った位置に保つ。
     GPIO.output(CYLINDER_RETRACT_PIN, GPIO.LOW)
     GPIO.output(CYLINDER_EXTEND_PIN, GPIO.LOW)
-    lights.ground()
 
 
 def game3_ground_pose(runtime):
@@ -271,7 +249,6 @@ def game3_ground_pose(runtime):
     servos = runtime.servos
     servos.lift.write(lift_orosu)
     servos.catch.write(catch_hozi)
-    lights.ground()
 
 
 def game3_grab(runtime):

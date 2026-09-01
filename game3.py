@@ -75,7 +75,6 @@ def main() -> None:
         while True:
             loop_started = time.monotonic()
             state = runtime.controller.read()
-            robot_actions.update_lights()
 
             # GAME3はTagを使わない。映像表示は別スレッドで行う。
             if vision_worker is not None:

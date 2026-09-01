@@ -217,6 +217,11 @@ class EncoderPositionServo:
         self._feedback_timed_out = False
         self.motor.stop()
 
+    @property
+    def home_position_rad(self) -> float | None:
+        """登録済みの0度位置(mechPos[rad])。未登録ならNone。"""
+        return self._home_position_rad
+
     def write(self, angle: float) -> float:
         """目標角度を指定し、以後その位置をPIDで保持する。Arduino Servoの ``write`` 相当。"""
         self.target_angle = self._limit(angle)
