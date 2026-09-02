@@ -139,15 +139,14 @@ class DualSenseMotionMapping:
     translation_gain: float = 1.0
     rotation_gain: float = 1.0
     response_exponent: float = 1.0
-    # 横移動時だけに混ぜる旋回補正。重心・床・タイヤ差で横移動中に曲がる
-    # 機体を、ジャイロ無しでも運転しやすくするための手動調整値。
-    strafe_rotation_compensation: float = 0.0
+    # 横移動だけの速度倍率。前後・旋回の速度には影響しない。
+    strafe_gain: float = 1.0
     # pygameのY軸は上方向が負になるため、実機に合わせて前後だけ反転できる。
     invert_forward: bool = False
 
     def __post_init__(self) -> None:
-        if not -1.0 <= self.strafe_rotation_compensation <= 1.0:
-            raise ValueError("strafe_rotation_compensation は -1.0〜1.0 にしてください")
+        if not 0.0 <= self.strafe_gain <= 1.0:
+            raise ValueError("strafe_gain は 0.0〜1.0 にしてください")
 
     def command(self, state: ControllerState) -> MotionCommand:
         """コントローラーの最新状態を正規化移動指令へ変換する。"""
@@ -160,11 +159,8 @@ class DualSenseMotionMapping:
         forward = _shape(left.y, self.response_exponent, self.translation_gain)
         if self.invert_forward:
             forward = -forward
-        strafe = _shape(left.x, self.response_exponent, self.translation_gain)
+        strafe = _shape(left.x, self.response_exponent, self.translation_gain * self.strafe_gain)
         rotate = _shape(right.x, self.response_exponent, self.rotation_gain)
-        # 例: 右移動で機首が右へ流れる時は、負の値にして左旋回を混ぜる。
-        # 右スティックの手動旋回はこの補正へ加算できる。
-        rotate += strafe * self.strafe_rotation_compensation
         return MotionCommand(
             forward=forward,
             strafe=strafe,

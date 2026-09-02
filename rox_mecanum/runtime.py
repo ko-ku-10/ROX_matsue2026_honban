@@ -67,7 +67,7 @@ class RobotRuntime:
                     response_exponent=hensuu.mecanum_response_exponent,
                     rotation_enable=Button.R2 if hensuu.mecanum_rotation_requires_r2 else None,
                     invert_forward=hensuu.mecanum_invert_forward_input,
-                    strafe_rotation_compensation=hensuu.mecanum_strafe_rotation_compensation,
+                    strafe_gain=hensuu.mecanum_strafe_speed_percent / 100.0,
                 ),
             )
         except Exception:

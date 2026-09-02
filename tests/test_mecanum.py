@@ -41,10 +41,10 @@ class MecanumTests(unittest.TestCase):
         command = DualSenseMotionMapping(deadzone=0.0).command(state)
         self.assertEqual(command, MotionCommand(forward=0.6, strafe=0.4, rotate=0.5))
 
-    def test_strafe_rotation_compensation_is_added_to_manual_rotation(self) -> None:
+    def test_strafe_speed_limit_does_not_change_manual_rotation(self) -> None:
         state = ControllerState(left_stick=AnalogStick(0.5, 0.0), right_stick=AnalogStick())
         command = DualSenseMotionMapping(
             deadzone=0.0,
-            strafe_rotation_compensation=-0.2,
+            strafe_gain=0.5,
         ).command(state)
-        self.assertEqual(command, MotionCommand(strafe=0.5, rotate=-0.1))
+        self.assertEqual(command, MotionCommand(strafe=0.25, rotate=0.0))
