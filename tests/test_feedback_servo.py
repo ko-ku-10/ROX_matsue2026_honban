@@ -68,6 +68,16 @@ class FeedbackServoTests(unittest.TestCase):
         self.assertIsNone(feedback.count)
         self.assertEqual(feedback.raw_at_frame, packet)
 
+    def test_servo_accepts_mechpos_raw_decimal_value(self):
+        motor = FakeMotor()
+        servo = EncoderPositionServo(motor, PositionServoConfig(-360, 360, 100))
+        servo.set_home_radians(0.0)
+        # float32の1.5radをlittle-endian uint32の10進数として渡す。
+        raw_position = int.from_bytes(pack("<f", 1.5), "little")
+        servo.write_mechpos_raw(raw_position)
+        self.assertAlmostEqual(servo.target_angle, 85.943669, places=5)
+        self.assertTrue(servo.pid_enabled)
+
     def test_parser_recovers_after_invalid_at_length(self):
         # 壊れたヘッダーが前にあっても、後ろの正しいATフレームを読める。
         valid = bytes.fromhex("41 54 10 00 2f 2c 08 34 12 00 00 00 00 00 00 0d 0a")

@@ -147,10 +147,10 @@ def main() -> None:
             # liftにはここから一切命令を出さない。
             if not mode.auto_enabled:
                 if state.was_pressed(Button.CIRCLE):
-                    runtime.servos.catch.write(robot_actions.catch_hozi)
+                    runtime.servos.catch.write_mechpos_raw(robot_actions.CATCH_GRAB_POSITION)
                     stage = "手動: catchを掴む姿勢へ"
                 elif state.was_pressed(Button.SQUARE):
-                    runtime.servos.catch.write(robot_actions.catch_machi)
+                    runtime.servos.catch.write_mechpos_raw(robot_actions.CATCH_BEFORE_GRAB_POSITION)
                     stage = "手動: catchを開く姿勢へ"
 
             # ↑は操縦者の「ゲートを通る」承認ボタン。

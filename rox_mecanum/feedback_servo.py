@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from math import atan2, cos, degrees, isfinite, pi, sin
-from struct import unpack
+from struct import pack, unpack
 from time import monotonic
 from typing import Mapping
 
@@ -241,6 +241,29 @@ class EncoderPositionServo:
         self.target_angle = self._limit(angle)
         self._holding = True
         return self.target_angle
+
+    def write_mechpos_raw(self, raw_position: int) -> float:
+        """mechPosの生4バイト値（little-endian uint32）を目標位置にする。
+
+        ``angle_monitor.py`` に出る「モーター位置（変換なし・10進数）」を
+        そのまま渡せる。利用者が度へ換算する必要はない。内部ではCAN応答と
+        比較するためだけにIEEE754 floatへ復元し、保存済み原点から最短方向の
+        目標角度へ変換する。
+        """
+        raw_position = int(raw_position)
+        if not 0 <= raw_position <= 0xFFFFFFFF:
+            raise ValueError("raw_position は0〜4294967295の10進数にしてください")
+        position_rad = unpack("<f", pack("<I", raw_position))[0]
+        if not isfinite(position_rad):
+            raise ValueError("raw_position が有限のmechPos値ではありません")
+        if self._home_position_rad is None:
+            raise RuntimeError(
+                "原点が未登録です。先にset_catch_origin.py / set_lift_origin.pyで原点を保存してください"
+            )
+
+        target_phase = _normalize_phase_rad(position_rad)
+        target_angle = degrees(_shortest_phase_delta_rad(target_phase - self._home_position_rad))
+        return self.write(target_angle)
 
     def read(self) -> float | None:
         """エンコーダーから得た現在角度を返す。"""

@@ -22,15 +22,16 @@ CYLINDER_EXTEND_PIN = 17
 CYLINDER_RETRACT_PIN = 27
 # 片側をOFFにしてから反対側をONにするまでの安全な待機時間。
 CYLINDER_SWITCH_OFF_SEC = 0.02
-# liftは起動時に地面ドリブル位置のストッパーを0度として原点合わせする。
-lift_orosu = 1
-# 以前の「下ろす106度 → 持上げ20度」の差を、ストッパー原点へ換算した仮値。
-# 実機で発射台に合う角度を確認してから自由に変える。
-lift_motiage = 90
-catch_hozi = 38
-catch_machi = 10
-# 地面で保持する角度とは別に、持上げ中にボールを保持できる角度。
-catch_motiage = 42
+# ==================================================
+# catch / lift の位置を、angle_monitor.pyに表示される
+# 「モーター位置（変換なし・10進数）」で直接書く。
+# 度へ換算してはいけない。各値は実機で測った位置そのもの。
+# ==================================================
+CATCH_GRAB_POSITION = 1065810619          # ボールを掴む位置
+CATCH_DRIBBLE_POSITION = 1063343419       # ドリブルする位置
+CATCH_BEFORE_GRAB_POSITION = 1052068812   # ボールを掴む前・開く位置
+LIFT_GROUND_POSITION = 3165714930         # 地面まで下ろす位置
+LIFT_UP_POSITION = 3217241157             # 持ち上げる位置
 
 # 指令した角度を待つ最大時間。超えたら停止せず次の動作へ進む。
 # 動作完了の判定には使わず、エンコーダーの実測角度で判定する。
@@ -83,8 +84,8 @@ def close_gpio():
 
 # ==================================================
 # ここから下の関数の中身を、あなたが自由に書く。
-# runtime.servos.lift.write(角度)
-# runtime.servos.catch.write(角度)
+# runtime.servos.lift.write_mechpos_raw(10進数の位置)
+# runtime.servos.catch.write_mechpos_raw(10進数の位置)
 # GPIO.output(CYLINDER_EXTEND_PIN, GPIO.HIGH)
 # time.sleep(秒)
 # などを自由に使える。
@@ -93,15 +94,15 @@ def close_gpio():
 def game1_start_pose(runtime):
     """GAME1: CREATEを押した時の開始姿勢。"""
     servos = runtime.servos
-    servos.lift.write(lift_orosu)
-    servos.catch.write(catch_hozi)
+    servos.lift.write_mechpos_raw(LIFT_GROUND_POSITION)
+    servos.catch.write_mechpos_raw(CATCH_DRIBBLE_POSITION)
 
 
 def game2_ground_pose(runtime):
     """GAME2: 地面にボールを付けて走る姿勢。"""
     servos = runtime.servos
-    servos.lift.write(lift_orosu)
-    servos.catch.write(catch_hozi)
+    servos.lift.write_mechpos_raw(LIFT_GROUND_POSITION)
+    servos.catch.write_mechpos_raw(CATCH_DRIBBLE_POSITION)
 
 
 def is_within_move_tolerance(servo):
@@ -160,24 +161,24 @@ class BallLiftAction:
     def _steps(self):
         servos = self.runtime.servos
         return (
-            (servos.lift, lift_orosu, "liftを下ろす"),
-            (servos.catch, catch_motiage, "catchを持上げ用の角度にする"),
-            (servos.lift, lift_motiage, "liftで発射台へ運ぶ"),
-            (servos.catch, catch_machi, "catchで発射台へ載せる"),
-            (servos.lift, lift_orosu, "liftを下ろす"),
+            (servos.lift, LIFT_GROUND_POSITION, "liftを下ろす"),
+            (servos.catch, CATCH_GRAB_POSITION, "catchでボールを掴む"),
+            (servos.lift, LIFT_UP_POSITION, "liftで発射台へ運ぶ"),
+            (servos.catch, CATCH_BEFORE_GRAB_POSITION, "catchを開いて発射台へ載せる"),
+            (servos.lift, LIFT_GROUND_POSITION, "liftを下ろす"),
         )
 
     def _send_step_target(self):
-        servo, angle, name = self._steps()[self.step]
-        servo.write(angle)
-        print(f"持上げ {self.step + 1}/5: {name} ({angle}度)")
+        servo, raw_position, name = self._steps()[self.step]
+        servo.write_mechpos_raw(raw_position)
+        print(f"持上げ {self.step + 1}/5: {name} (位置={raw_position})")
 
     def update(self):
         """1回だけ到達を確認する。完了した時だけTrueを返す。"""
         if self.finished:
             return True
 
-        servo, _angle, name = self._steps()[self.step]
+        servo, _raw_position, name = self._steps()[self.step]
         if is_within_move_tolerance(servo):
             self.step += 1
             if self.step >= len(self._steps()):
@@ -215,8 +216,8 @@ def start_ball_lift_for_shot(runtime):
 def cancel_ball_lift_for_shot(action, runtime):
     """×で持上げを中断し、ボールを地面で保持する姿勢へ戻す。"""
     action.cancel()
-    runtime.servos.lift.write(lift_orosu)
-    runtime.servos.catch.write(catch_hozi)
+    runtime.servos.lift.write_mechpos_raw(LIFT_GROUND_POSITION)
+    runtime.servos.catch.write_mechpos_raw(CATCH_DRIBBLE_POSITION)
 
 
 def ball_lift_for_shot(runtime):
@@ -247,19 +248,19 @@ def ball_fire(runtime):
 def game3_ground_pose(runtime):
     """GAME3: 地面走行姿勢。"""
     servos = runtime.servos
-    servos.lift.write(lift_orosu)
-    servos.catch.write(catch_hozi)
+    servos.lift.write_mechpos_raw(LIFT_GROUND_POSITION)
+    servos.catch.write_mechpos_raw(CATCH_BEFORE_GRAB_POSITION)
 
 
 def game3_grab(runtime):
     """GAME3: ○を押した時の掴む動作。"""
     servos = runtime.servos
-    servos.lift.write(lift_orosu)
-    servos.catch.write(catch_hozi)
+    servos.lift.write_mechpos_raw(LIFT_GROUND_POSITION)
+    servos.catch.write_mechpos_raw(CATCH_GRAB_POSITION)
 
 def game3_release(runtime):
     """GAME3: □を押した時の排出動作。"""
     servos = runtime.servos
-    servos.lift.write(lift_orosu)
-    servos.catch.write(catch_machi)
+    servos.lift.write_mechpos_raw(LIFT_GROUND_POSITION)
+    servos.catch.write_mechpos_raw(CATCH_BEFORE_GRAB_POSITION)
 
