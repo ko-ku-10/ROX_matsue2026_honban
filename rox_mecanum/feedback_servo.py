@@ -45,6 +45,8 @@ class EncoderFeedback:
     # RobStride正式形式のmechPos(0x7019): load側の多回転機械角[rad]。
     # AT変換器が旧ステータス形式しか返さない場合はNoneになり、countを使う。
     position_rad: float | None = None
+    # 受信したAT応答フレーム全体。診断時に通信内容をそのまま表示できる。
+    raw_at_frame: bytes = b""
 
 
 class ATEncoderReader:
@@ -128,6 +130,7 @@ class ATEncoderReader:
                         count,
                         timestamp,
                         position_rad,
+                        b"AT" + at_identifier.to_bytes(4, "big") + bytes((len(data),)) + data + b"\r\n",
                     )
                 )
         return values

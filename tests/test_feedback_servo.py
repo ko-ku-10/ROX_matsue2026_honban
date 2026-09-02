@@ -66,6 +66,7 @@ class FeedbackServoTests(unittest.TestCase):
         feedback = reader.poll(now=1.0)[0]
         self.assertAlmostEqual(feedback.position_rad, 1.5)
         self.assertIsNone(feedback.count)
+        self.assertEqual(feedback.raw_at_frame, packet)
 
     def test_parser_recovers_after_invalid_at_length(self):
         # 壊れたヘッダーが前にあっても、後ろの正しいATフレームを読める。

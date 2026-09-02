@@ -40,6 +40,7 @@ def main() -> None:
     # 起動時の実測角度を控える。relative_deg はここからの変化量です。
     start_rad: dict[str, float] = {}
     current_rad: dict[str, float] = {}
+    raw_frames: dict[str, bytes] = {}
     next_display_at = 0.0
 
     print("=" * 56)
@@ -48,6 +49,7 @@ def main() -> None:
     print("  raw_deg: RobStride内部のmechPosを度へ換算した値（電源投入で360度単位にずれる）")
     print("  phase_deg: 1回転内へ丸めた角度（電源を入れ直しても原点保存に使える値）")
     print("  relative_deg: このプログラムを起動した位置からの角度差")
+    print("  AT応答: CAN-USB変換器から届いた生の17バイトフレーム（16進数）")
     print("=" * 56)
 
     try:
@@ -64,6 +66,7 @@ def main() -> None:
                     continue
                 current_rad[feedback.name] = feedback.position_rad
                 start_rad.setdefault(feedback.name, feedback.position_rad)
+                raw_frames[feedback.name] = feedback.raw_at_frame
 
             if now >= next_display_at:
                 lines = []
@@ -77,9 +80,11 @@ def main() -> None:
                     lines.append(
                         f"{name}: raw={current_rad[name]:+9.4f} rad "
                         f"({raw_deg:+9.2f} deg) phase={phase_deg:+8.2f} deg  "
-                        f"開始位置から {relative_deg:+8.2f} deg"
+                        f"開始位置から {relative_deg:+8.2f} deg\n"
+                        f"  AT応答: {raw_frames[name].hex(' ')}\n"
+                        f"  mechPosデータ: {raw_frames[name][7:15].hex(' ')}"
                     )
-                print(" | ".join(lines))
+                print("\n".join(lines))
                 next_display_at = now + DISPLAY_INTERVAL_SEC
 
             time.sleep(0.015)
