@@ -73,7 +73,7 @@ lift_max_angle = 360
 lift_calibration_speed_percent = 15.0
 lift_move_speed_percent = 10
 lift_90deg_time_sec = 0.124
-lift_direction = -1
+lift_direction = 1
 lift_brake_time_sec = 0.08
 
 # 起動時のcatch原点合わせ。開く側の機械ストッパーまで動かし、
