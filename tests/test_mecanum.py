@@ -48,3 +48,16 @@ class MecanumTests(unittest.TestCase):
             strafe_gain=0.5,
         ).command(state)
         self.assertEqual(command, MotionCommand(strafe=0.25, rotate=0.0))
+
+    def test_l2_slow_mode_scales_all_manual_motion(self) -> None:
+        state = ControllerState(
+            left_stick=AnalogStick(0.4, 0.6),
+            right_stick=AnalogStick(0.5, 0.0),
+            l2=1.0,
+        )
+        command = DualSenseMotionMapping(
+            deadzone=0.0,
+            slow_mode_button=Button.L2,
+            slow_mode_gain=0.3,
+        ).command(state)
+        self.assertEqual(command, MotionCommand(forward=0.18, strafe=0.12, rotate=0.15))

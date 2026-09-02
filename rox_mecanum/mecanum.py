@@ -130,7 +130,8 @@ class DualSenseMotionMapping:
     """DualSense 状態から移動指令を作る規則。
 
     既定では左スティックが前後・平行移動、右スティック X が旋回。移動も旋回も
-    常に有効で、L2/R2は他の用途へ自由に割り当てられる。
+    常に有効である。``slow_mode_button`` を指定すると、そのボタンを押している
+    間だけ前後・横移動・旋回をまとめて低速化できる。
     """
 
     deadzone: float = 0.08
@@ -143,10 +144,20 @@ class DualSenseMotionMapping:
     strafe_gain: float = 1.0
     # pygameのY軸は上方向が負になるため、実機に合わせて前後だけ反転できる。
     invert_forward: bool = False
+    # 押している間だけ低速化するボタン。Noneなら低速モードを使わない。
+    slow_mode_button: Button | None = None
+    # 低速時の速度倍率。0.30なら全方向が通常の30%になる。
+    slow_mode_gain: float = 1.0
+    # L2/R2のようなアナログトリガーを低速ボタンとして使う時の判定値。
+    slow_mode_trigger_threshold: float = 0.20
 
     def __post_init__(self) -> None:
         if not 0.0 <= self.strafe_gain <= 1.0:
             raise ValueError("strafe_gain は 0.0〜1.0 にしてください")
+        if not 0.0 <= self.slow_mode_gain <= 1.0:
+            raise ValueError("slow_mode_gain は 0.0〜1.0 にしてください")
+        if not 0.0 <= self.slow_mode_trigger_threshold <= 1.0:
+            raise ValueError("slow_mode_trigger_threshold は 0.0〜1.0 にしてください")
 
     def command(self, state: ControllerState) -> MotionCommand:
         """コントローラーの最新状態を正規化移動指令へ変換する。"""
@@ -156,16 +167,29 @@ class DualSenseMotionMapping:
             left = AnalogStick()
         if self.rotation_enable is not None and not state.button(self.rotation_enable):
             right = AnalogStick()
-        forward = _shape(left.y, self.response_exponent, self.translation_gain)
+        speed_gain = self.slow_mode_gain if self._slow_mode_active(state) else 1.0
+        forward = _shape(left.y, self.response_exponent, self.translation_gain * speed_gain)
         if self.invert_forward:
             forward = -forward
-        strafe = _shape(left.x, self.response_exponent, self.translation_gain * self.strafe_gain)
-        rotate = _shape(right.x, self.response_exponent, self.rotation_gain)
+        strafe = _shape(left.x, self.response_exponent, self.translation_gain * self.strafe_gain * speed_gain)
+        rotate = _shape(right.x, self.response_exponent, self.rotation_gain * speed_gain)
         return MotionCommand(
             forward=forward,
             strafe=strafe,
             rotate=rotate,
         )
+
+    def _slow_mode_active(self, state: ControllerState) -> bool:
+        """低速ボタンが押されているかを判定する。"""
+        if self.slow_mode_button is None:
+            return False
+        if state.button(self.slow_mode_button):
+            return True
+        if self.slow_mode_button is Button.L2:
+            return state.l2 >= self.slow_mode_trigger_threshold
+        if self.slow_mode_button is Button.R2:
+            return state.r2 >= self.slow_mode_trigger_threshold
+        return False
 
 
 def _clip(value: float) -> float:

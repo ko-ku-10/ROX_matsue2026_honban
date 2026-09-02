@@ -6,9 +6,8 @@
   左スティック 上下: 前進 / 後退
   左スティック 左右: 左右平行移動
   右スティック 左右: 旋回
+  L2を押している間: 低速モード
   OPTIONS: 安全停止して終了
-
-L2 はこのプログラムでは一切使わない。他の操作用に自由に使える。
 """
 
 from __future__ import annotations
@@ -55,6 +54,7 @@ def main() -> None:
             print("  R2 + 右スティック左右: 旋回")
         else:
             print("  右スティック左右: 旋回")
+        print(f"  L2を押している間: 低速モード（通常の{float(hensuu.mecanum_slow_mode_percent):.0f}%）")
         print("  OPTIONS: 停止して終了")
 
         controller = open_configured_dualsense()
@@ -90,6 +90,9 @@ def main() -> None:
             response_exponent=hensuu.mecanum_response_exponent,
             invert_forward=hensuu.mecanum_invert_forward_input,
             strafe_gain=hensuu.mecanum_strafe_speed_percent / 100.0,
+            slow_mode_button=Button.L2,
+            slow_mode_gain=hensuu.mecanum_slow_mode_percent / 100.0,
+            slow_mode_trigger_threshold=hensuu.mecanum_slow_mode_trigger_threshold,
         )
 
         robot.enable_all(

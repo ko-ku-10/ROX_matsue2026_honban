@@ -34,7 +34,7 @@ class Stage(str, Enum):
 
 
 def main() -> None:
-    print("GAME3: CREATE=ドリブル姿勢・持上げ中リセット / ○=ドリブル保持 / □=開く / △=持上げ / R1=発射 / OPTIONS=停止")
+    print("GAME3: CREATE=ドリブル姿勢・持上げ中リセット / ○=ドリブル保持 / □=開く / △=持上げ / R1=発射 / L2=低速 / OPTIONS=停止")
     runtime = None
     camera = None
     status_site = None

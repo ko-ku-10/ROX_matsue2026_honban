@@ -106,6 +106,7 @@ AIM_DISTANCE_M = {
 
 def main() -> None:
     print("GAME2: タッチパッド=手動/自動")
+    print("  L2を押している間: 手動走行を低速化")
     print("  手動: CREATE/×=ドリブル姿勢, ○=ドリブル保持, □=開く, △=持上げ, R1=発射")
     print("  自動: ↑=Tag18の位置(x/z)へ照準, △=持上げ, L1=ソレノイド発射")
     runtime = None
