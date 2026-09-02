@@ -27,10 +27,10 @@ CYLINDER_SWITCH_OFF_SEC = 0.02
 # 「モーター位置（変換なし・10進数）」で直接書く。
 # 度へ換算してはいけない。各値は実機で測った位置そのもの。
 # ==================================================
-CATCH_OPEN_POSITION = 1065810619          # catchを開く位置
+CATCH_OPEN_POSITION = 1052068812            # catchを開く位置
 # 実機確認済み: 下の2つは以前の名前と逆だったため、用途に合わせて設定する。
 CATCH_DRIBBLE_POSITION = 1063343419       # ボールを地面でドリブルする位置
-CATCH_LIFT_POSITION = 1052068812          # ボールを持ち上げる時の位置
+CATCH_LIFT_POSITION = 1065810619         # ボールを持ち上げる時の位置
 LIFT_GROUND_POSITION = 3165714930         # 地面まで下ろす位置
 LIFT_UP_POSITION = 3217241157             # 持ち上げる位置
 
