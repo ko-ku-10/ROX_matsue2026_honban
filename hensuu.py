@@ -50,6 +50,10 @@ mecanum_command_reverse_guard_counts = 420
 mecanum_invert_forward_input = True
 # Falseなら右スティック左右だけで旋回する。L2/R2を押す必要はない。
 mecanum_rotation_requires_r2 = False
+# 横移動中に重心・床の差で機首が曲がる時の補正。0.0なら補正なし。
+# 右へ横移動した時に機首も右へ曲がるなら -0.05、左へ曲がるなら +0.05 から試す。
+# 0.02ずつ調整する。右スティックでの手動旋回は常に使える。
+mecanum_strafe_rotation_compensation = 0.0
 
 # catch: CAN ID 5、時間式サーボ
 catch_can_id = 5

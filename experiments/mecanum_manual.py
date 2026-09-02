@@ -89,6 +89,7 @@ def main() -> None:
             rotation_gain=1.0,
             response_exponent=hensuu.mecanum_response_exponent,
             invert_forward=hensuu.mecanum_invert_forward_input,
+            strafe_rotation_compensation=hensuu.mecanum_strafe_rotation_compensation,
         )
 
         robot.enable_all(
