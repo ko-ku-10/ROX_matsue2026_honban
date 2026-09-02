@@ -1,7 +1,9 @@
 """実機で調整する値だけをここにまとめる。"""
 
 # メカナム・catch モーター共通のUSBシリアル接続
-serial_port = "/dev/ttyUSB0"
+# 現在RDK X5で確認できたUSB-CANの接続先。
+# USBを抜き差しして番号が変わった時だけ、``ls -l /dev/ttyUSB*`` で確認して直す。
+serial_port = "/dev/ttyUSB1"
 serial_baud = 921600
 
 # catch/liftの物理0度を一度だけ保存するファイル。

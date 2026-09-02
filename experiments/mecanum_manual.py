@@ -5,7 +5,7 @@
 操作:
   左スティック 上下: 前進 / 後退
   左スティック 左右: 左右平行移動
-  右スティック 左右: 旋回（既定では R2 を押している間だけ）
+  右スティック 左右: 旋回
   OPTIONS: 安全停止して終了
 
 L2 はこのプログラムでは一切使わない。他の操作用に自由に使える。
@@ -74,14 +74,21 @@ def main() -> None:
             motor_directions={"FL": 1.0, "FR": -1.0, "RL": 1.0, "RR": -1.0},
             mixer=mixer,
             speed_span=_speed_span(hensuu.mecanum_speed_percent),
+            acceleration_per_second=hensuu.mecanum_acceleration_percent_per_sec / 100.0,
+            deceleration_per_second=hensuu.mecanum_deceleration_percent_per_sec / 100.0,
+            command_minimum_interval=hensuu.mecanum_command_minimum_interval_sec,
+            command_force_delta=hensuu.mecanum_command_force_delta,
+            command_value_hysteresis_counts=hensuu.mecanum_command_hysteresis_counts,
+            command_reverse_guard_counts=hensuu.mecanum_command_reverse_guard_counts,
         )
         mapping = DualSenseMotionMapping(
-            deadzone=0.08,
+            deadzone=hensuu.mecanum_deadzone,
             translation_enable=None,  # L2を移動条件にしない
             rotation_enable=Button.R2 if hensuu.mecanum_rotation_requires_r2 else None,
             translation_gain=1.0,
             rotation_gain=1.0,
-            response_exponent=1.0,
+            response_exponent=hensuu.mecanum_response_exponent,
+            invert_forward=hensuu.mecanum_invert_forward_input,
         )
 
         robot.enable_all(
