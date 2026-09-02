@@ -61,3 +61,13 @@ class MecanumTests(unittest.TestCase):
             slow_mode_gain=0.3,
         ).command(state)
         self.assertEqual(command, MotionCommand(forward=0.18, strafe=0.12, rotate=0.15))
+
+    def test_l2_middle_axis_value_does_not_enable_slow_mode(self) -> None:
+        state = ControllerState(left_stick=AnalogStick(0.4, 0.6), l2=0.5)
+        command = DualSenseMotionMapping(
+            deadzone=0.0,
+            slow_mode_button=Button.L2,
+            slow_mode_gain=0.3,
+            slow_mode_trigger_threshold=0.75,
+        ).command(state)
+        self.assertEqual(command, MotionCommand(forward=0.6, strafe=0.4))

@@ -183,13 +183,13 @@ class DualSenseMotionMapping:
         """低速ボタンが押されているかを判定する。"""
         if self.slow_mode_button is None:
             return False
-        if state.button(self.slow_mode_button):
-            return True
+        # DualSenseのL2/R2は、Bluetooth接続ではボタン番号が常時ONに見える
+        # ことがある。そのためトリガーはボタン番号を使わず、軸の押込み量だけで判定する。
         if self.slow_mode_button is Button.L2:
             return state.l2 >= self.slow_mode_trigger_threshold
         if self.slow_mode_button is Button.R2:
             return state.r2 >= self.slow_mode_trigger_threshold
-        return False
+        return state.button(self.slow_mode_button)
 
 
 def _clip(value: float) -> float:
