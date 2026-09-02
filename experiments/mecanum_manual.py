@@ -6,7 +6,7 @@
   左スティック 上下: 前進 / 後退
   左スティック 左右: 左右平行移動
   右スティック 左右: 旋回
-  L2を押している間: 低速モード
+  L1を押している間: 低速モード
   OPTIONS: 安全停止して終了
 """
 
@@ -54,7 +54,7 @@ def main() -> None:
             print("  R2 + 右スティック左右: 旋回")
         else:
             print("  右スティック左右: 旋回")
-        print(f"  L2を押している間: 低速モード（通常の{float(hensuu.mecanum_slow_mode_percent):.0f}%）")
+        print(f"  L1を押している間: 低速モード（通常の{float(hensuu.mecanum_slow_mode_percent):.0f}%）")
         print("  OPTIONS: 停止して終了")
 
         controller = open_configured_dualsense()
@@ -83,16 +83,15 @@ def main() -> None:
         )
         mapping = DualSenseMotionMapping(
             deadzone=hensuu.mecanum_deadzone,
-            translation_enable=None,  # L2を移動条件にしない
+            translation_enable=None,  # L1を移動条件にしない
             rotation_enable=Button.R2 if hensuu.mecanum_rotation_requires_r2 else None,
             translation_gain=1.0,
             rotation_gain=1.0,
             response_exponent=hensuu.mecanum_response_exponent,
             invert_forward=hensuu.mecanum_invert_forward_input,
             strafe_gain=hensuu.mecanum_strafe_speed_percent / 100.0,
-            slow_mode_button=Button.L2,
+            slow_mode_button=Button.L1,
             slow_mode_gain=hensuu.mecanum_slow_mode_percent / 100.0,
-            slow_mode_trigger_threshold=hensuu.mecanum_slow_mode_trigger_threshold,
         )
 
         robot.enable_all(

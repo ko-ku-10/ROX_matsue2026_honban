@@ -53,12 +53,9 @@ mecanum_rotation_requires_r2 = False
 # 横移動だけの最高速度（0〜100%）。前後・旋回の速度には影響しない。
 # 後ろが重くて横移動中に曲がる時は、まず50%程度から試す。
 mecanum_strafe_speed_percent = 50.0
-# L2を押している間だけ使う低速モードの速度。前後・横移動・旋回すべてに効く。
+# L1を押している間だけ使う低速モードの速度。前後・横移動・旋回すべてに効く。
 # 30なら、スティックを最大まで倒しても通常時の30%までに抑える。
 mecanum_slow_mode_percent = 30.0
-# L2をどのくらい引いたら低速モードにするか（0.0〜1.0）。
-# Bluetooth環境によっては、何も押していない時に0.5付近を返すため0.75にしている。
-mecanum_slow_mode_trigger_threshold = 0.75
 
 # catch: CAN ID 5、時間式サーボ
 catch_can_id = 5

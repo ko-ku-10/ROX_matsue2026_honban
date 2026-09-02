@@ -63,7 +63,7 @@ TAG8_SEARCH_TIMEOUT_SEC = 2.0
 def main() -> None:
     print("GAME1: 手動走行 + Tag8ゲート通過支援")
     print("  タッチパッド: 手動 / 自動を切替")
-    print("  L2を押している間: 手動走行を低速化")
+    print("  L1を押している間: 手動走行を低速化")
     print("  手動モードの○: catchを掴む / □: catchを開く")
     print("  自動モードの↑: Tag8正面へ移動 → 距離1m → 2m通過")
     print("  OPTIONS: 非常停止")

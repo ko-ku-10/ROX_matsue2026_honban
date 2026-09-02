@@ -106,9 +106,9 @@ AIM_DISTANCE_M = {
 
 def main() -> None:
     print("GAME2: タッチパッド=手動/自動")
-    print("  L2を押している間: 手動走行を低速化")
+    print("  L1を押している間: 手動走行を低速化")
     print("  手動: CREATE/×=ドリブル姿勢, ○=ドリブル保持, □=開く, △=持上げ, R1=発射")
-    print("  自動: ↑=Tag18の位置(x/z)へ照準, △=持上げ, L1=ソレノイド発射")
+    print("  自動: ↑=Tag18の位置(x/z)へ照準, △=持上げ, R1=ソレノイド発射")
     runtime = None
     camera = None
     status_site = None
@@ -494,14 +494,14 @@ def main() -> None:
                         stage = "リセット中: 地面ドリブル姿勢へ"
                     elif lift_action is not None and lift_action.update():
                         lift_action = None
-                        stage = "発射準備完了: L1で発射"
+                        stage = "発射準備完了: R1で発射"
 
                 elif stage == "リセット中: 地面ドリブル姿勢へ":
                     if runtime.servos.catch.is_at_target() and runtime.servos.lift.is_at_target():
                         stage = "補給後待ち: ↑で照準開始"
 
-                # L1: GAME3と共通の発射動作を実行する。
-                elif stage == "発射準備完了: L1で発射" and state.was_pressed(Button.L1):
+                # R1: GAME3と共通の発射動作を実行する。
+                elif stage == "発射準備完了: R1で発射" and state.was_pressed(Button.R1):
                     robot_actions.ball_fire(runtime)
                     stage = "発射完了: 手動で戻る"
 
