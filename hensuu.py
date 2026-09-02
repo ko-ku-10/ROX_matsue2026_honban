@@ -3,7 +3,7 @@
 # メカナム・catch モーター共通のUSBシリアル接続
 # 現在RDK X5で確認できたUSB-CANの接続先。
 # USBを抜き差しして番号が変わった時だけ、``ls -l /dev/ttyUSB*`` で確認して直す。
-serial_port = "/dev/ttyUSB1"
+serial_port = "/dev/ttyUSB0"
 serial_baud = 921600
 
 # catch/liftの物理0度を一度だけ保存するファイル。
@@ -59,7 +59,7 @@ catch_max_angle = 360
 catch_calibration_speed_percent = 7.5
 catch_move_speed_percent = 10
 catch_90deg_time_sec = 0.124       # 実測値。90度に掛かった時間
-catch_direction = 1                # 角度を増やして逆へ動く場合は -1
+catch_direction = 1         # 角度を増やして逆へ動く場合は -1
 catch_brake_time_sec = 0.08        # 停止前に減速する時間。反動が残るなら増やす
 
 # lift: CAN ID 6、時間式サーボ
@@ -70,7 +70,7 @@ lift_max_angle = 360
 lift_calibration_speed_percent = 15.0
 lift_move_speed_percent = 10
 lift_90deg_time_sec = 0.124
-lift_direction = 1
+lift_direction = -1
 lift_brake_time_sec = 0.08
 
 # 起動時のcatch原点合わせ。開く側の機械ストッパーまで動かし、
