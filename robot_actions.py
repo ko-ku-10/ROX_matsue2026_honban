@@ -246,10 +246,10 @@ def ball_fire(runtime):
 
 
 def game3_ground_pose(runtime):
-    """GAME3: 地面走行姿勢。"""
+    """GAME3: 地面にボールを付けて走るドリブル姿勢。"""
     servos = runtime.servos
     servos.lift.write_mechpos_raw(LIFT_GROUND_POSITION)
-    servos.catch.write_mechpos_raw(CATCH_BEFORE_GRAB_POSITION)
+    servos.catch.write_mechpos_raw(CATCH_DRIBBLE_POSITION)
 
 
 def game3_grab(runtime):

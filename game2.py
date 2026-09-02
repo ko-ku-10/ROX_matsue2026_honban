@@ -245,10 +245,10 @@ def main() -> None:
                     if lift_action is not None:
                         robot_actions.cancel_ball_lift_for_shot(lift_action, runtime)
                         lift_action = None
-                    robot_actions.game3_ground_pose(runtime)
+                    robot_actions.game2_ground_pose(runtime)
                     stage = "完全手動: 地面走行姿勢へ"
                 elif state.was_pressed(Button.CROSS) and lift_action is None:
-                    robot_actions.game3_ground_pose(runtime)
+                    robot_actions.game2_ground_pose(runtime)
                     stage = "完全手動: 地面走行姿勢へ"
                 elif state.was_pressed(Button.CIRCLE):
                     robot_actions.game3_grab(runtime)
