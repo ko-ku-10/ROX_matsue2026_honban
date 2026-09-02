@@ -27,9 +27,9 @@ CYLINDER_SWITCH_OFF_SEC = 0.02
 # 「モーター位置（変換なし・10進数）」で直接書く。
 # 度へ換算してはいけない。各値は実機で測った位置そのもの。
 # ==================================================
-CATCH_GRAB_POSITION = 1065810619          # ボールを掴む位置
-CATCH_DRIBBLE_POSITION = 1063343419       # ドリブルする位置
-CATCH_BEFORE_GRAB_POSITION = 1052068812   # ボールを掴む前・開く位置
+CATCH_OPEN_POSITION = 1065810619          # catchを開く位置
+CATCH_LIFT_POSITION = 1063343419          # ボールを持ち上げる時の位置
+CATCH_DRIBBLE_POSITION = 1052068812       # ボールを地面でドリブルする位置
 LIFT_GROUND_POSITION = 3165714930         # 地面まで下ろす位置
 LIFT_UP_POSITION = 3217241157             # 持ち上げる位置
 
@@ -95,7 +95,7 @@ def game1_start_pose(runtime):
     """GAME1: CREATEを押した時の開始姿勢。"""
     servos = runtime.servos
     servos.lift.write_mechpos_raw(LIFT_GROUND_POSITION)
-    servos.catch.write_mechpos_raw(CATCH_DRIBBLE_POSITION)
+    servos.catch.write_mechpos_raw(CATCH_OPEN_POSITION)
 
 
 def game2_ground_pose(runtime):
@@ -162,9 +162,9 @@ class BallLiftAction:
         servos = self.runtime.servos
         return (
             (servos.lift, LIFT_GROUND_POSITION, "liftを下ろす"),
-            (servos.catch, CATCH_GRAB_POSITION, "catchでボールを掴む"),
+            (servos.catch, CATCH_LIFT_POSITION, "catchを持上げ用の位置にする"),
             (servos.lift, LIFT_UP_POSITION, "liftで発射台へ運ぶ"),
-            (servos.catch, CATCH_BEFORE_GRAB_POSITION, "catchを開いて発射台へ載せる"),
+            (servos.catch, CATCH_OPEN_POSITION, "catchを開いて発射台へ載せる"),
             (servos.lift, LIFT_GROUND_POSITION, "liftを下ろす"),
         )
 
@@ -253,14 +253,14 @@ def game3_ground_pose(runtime):
 
 
 def game3_grab(runtime):
-    """GAME3: ○を押した時の掴む動作。"""
+    """GAME3: ○を押した時、地面でボールを保持するドリブル姿勢。"""
     servos = runtime.servos
     servos.lift.write_mechpos_raw(LIFT_GROUND_POSITION)
-    servos.catch.write_mechpos_raw(CATCH_GRAB_POSITION)
+    servos.catch.write_mechpos_raw(CATCH_DRIBBLE_POSITION)
 
 def game3_release(runtime):
     """GAME3: □を押した時の排出動作。"""
     servos = runtime.servos
     servos.lift.write_mechpos_raw(LIFT_GROUND_POSITION)
-    servos.catch.write_mechpos_raw(CATCH_BEFORE_GRAB_POSITION)
+    servos.catch.write_mechpos_raw(CATCH_OPEN_POSITION)
 

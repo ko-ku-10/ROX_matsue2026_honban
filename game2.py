@@ -106,7 +106,7 @@ AIM_DISTANCE_M = {
 
 def main() -> None:
     print("GAME2: タッチパッド=手動/自動")
-    print("  手動: CREATE/×=地面姿勢, ○=掴む, □=排出, △=持上げ, R1=発射")
+    print("  手動: CREATE/×=ドリブル姿勢, ○=ドリブル保持, □=開く, △=持上げ, R1=発射")
     print("  自動: ↑=Tag18の位置(x/z)へ照準, △=持上げ, L1=ソレノイド発射")
     runtime = None
     camera = None
@@ -252,7 +252,7 @@ def main() -> None:
                     stage = "完全手動: 地面走行姿勢へ"
                 elif state.was_pressed(Button.CIRCLE):
                     robot_actions.game3_grab(runtime)
-                    stage = "完全手動: 掴む姿勢"
+                    stage = "完全手動: ドリブル保持姿勢"
                 elif state.was_pressed(Button.SQUARE):
                     robot_actions.game3_release(runtime)
                     stage = "完全手動: 排出姿勢"
