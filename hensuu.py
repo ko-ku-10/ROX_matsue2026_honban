@@ -56,6 +56,9 @@ mecanum_strafe_speed_percent = 50.0
 # L1を押している間だけ使う低速モードの速度。前後・横移動・旋回すべてに効く。
 # 30なら、スティックを最大まで倒しても通常時の30%までに抑える。
 mecanum_slow_mode_percent = 30.0
+# L1低速中の旋回だけの速度。前後・横移動とは別に調節できる。
+# 30なら低速中の旋回も通常時の30%。細かく向きを合わせたい時は小さくする。
+mecanum_slow_mode_rotation_percent = 30.0
 
 # catch: CAN ID 5、時間式サーボ
 catch_can_id = 5

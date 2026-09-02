@@ -59,5 +59,6 @@ class MecanumTests(unittest.TestCase):
             deadzone=0.0,
             slow_mode_button=Button.L1,
             slow_mode_gain=0.3,
+            slow_mode_rotation_gain=0.5,
         ).command(state)
-        self.assertEqual(command, MotionCommand(forward=0.18, strafe=0.12, rotate=0.15))
+        self.assertEqual(command, MotionCommand(forward=0.18, strafe=0.12, rotate=0.25))

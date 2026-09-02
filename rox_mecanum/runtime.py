@@ -70,6 +70,7 @@ class RobotRuntime:
                     strafe_gain=hensuu.mecanum_strafe_speed_percent / 100.0,
                     slow_mode_button=Button.L1,
                     slow_mode_gain=hensuu.mecanum_slow_mode_percent / 100.0,
+                    slow_mode_rotation_gain=hensuu.mecanum_slow_mode_rotation_percent / 100.0,
                 ),
             )
         except Exception:
