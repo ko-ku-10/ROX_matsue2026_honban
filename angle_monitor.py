@@ -44,7 +44,7 @@ def main() -> None:
     print("  catch / lift のmechPos生データを表示します（読み取り専用）")
     print("  Ctrl+C で終了")
     print("  表示値はすべて変換前の10進数バイト値です")
-    print("  mechPos本体はデータの5〜8番目の4バイトです")
+    print("  最初の行の『モーター位置（変換なし・10進数）』を確認してください")
     print("=" * 56)
 
     try:
@@ -72,7 +72,8 @@ def main() -> None:
                     position_bytes = payload[4:8]
                     position_bits = int.from_bytes(position_bytes, "little")
                     lines.append(
-                        f"{name}: AT応答（10進数）: {' '.join(str(value) for value in frame)}\n"
+                        f"{name}: モーター位置（変換なし・10進数）= {position_bits}\n"
+                        f"  AT応答（10進数）: {' '.join(str(value) for value in frame)}\n"
                         f"  データ8バイト（10進数）: {' '.join(str(value) for value in payload)}\n"
                         f"  mechPosの4バイト（10進数）: {' '.join(str(value) for value in position_bytes)}\n"
                         f"  mechPos生bit列（uint32 little-endian）: {position_bits}"
