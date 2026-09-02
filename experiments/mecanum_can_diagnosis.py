@@ -19,6 +19,7 @@ from rox_mecanum.serial_at import (
     PySerialTransport,
     build_mecanum_motion_control_value_frame,
 )
+from rox_mecanum.feedback_servo import ATEncoderReader
 
 
 # ここだけ書き換えると、診断時の回転速度を変えられます。
@@ -60,10 +61,34 @@ def main() -> None:
         )
         for name, address in WHEELS.items()
     }
+    reader = ATEncoderReader(transport, WHEELS)
 
     try:
+        # まず動かさず、4輪のmechPos応答だけを確認する。ここで応答がない
+        # モーターへ速度指令を送っても動かないため、ID・配線を先に切り分ける。
+        print("\n1) 4輪のmechPos応答を確認します（この段階では回りません）")
+        received: dict[str, float] = {}
+        deadline = time.monotonic() + 1.5
+        while time.monotonic() < deadline and len(received) < len(WHEELS):
+            reader.request_next()
+            time.sleep(0.015)
+            for feedback in reader.poll():
+                if feedback.position_rad is not None:
+                    received[feedback.name] = feedback.position_rad
+            time.sleep(0.015)
+
+        for name in WHEELS:
+            if name in received:
+                print(f"  {name}: mechPos={received[name]:+.5f} rad")
+            else:
+                print(f"  {name}: 応答なし")
+        if len(received) != len(WHEELS):
+            print("\n停止: 応答なしの車輪があります。CAN ID・電源・CAN配線を確認してください。")
+            print("この診断は速度指令を送らずに終了します。")
+            return
+
         # 公式サンプルと同じenableを3回送る。ここではまだ回りません。
-        print("enableフレームを全輪へ送信中...")
+        print("\n2) enableフレームを全輪へ送信中...")
         for _ in range(3):
             for motor in motors.values():
                 motor.enable()
