@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import time
 from dataclasses import dataclass
-from math import isfinite
+from math import atan2, cos, degrees, isfinite, sin
 from pathlib import Path
 from threading import Event, Lock, Thread, current_thread
 
@@ -18,6 +18,7 @@ from rox_mecanum import (
     PositionServoConfig,
     PySerialTransport,
     at_address_from_can_id,
+    build_mecanum_motion_control_value_frame,
 )
 
 
@@ -188,8 +189,11 @@ class ServoMotors:
         # 応答を落とすことがある。最初に動かし、以後は0.25秒ごとだけ
         # 再送する。モーターは最後の速度指令を保持する仕様を使う。
         next_speed_refresh = 0.0
-        # 1周期(約30ms)だけの変化では低速時に「停止」と誤認する。
-        # stillness_secの間にどれだけ動いたかで、ストッパーを判定する。
+        # 速度指令が届かなかった時に「最初から止まっていた=ストッパー」と
+        # 誤認しないため、まず実測角度が動いたことを必ず確認する。
+        # 動いた後だけ、stillness_sec間の停止をストッパーとして扱う。
+        motion_confirmed = False
+        motion_started_position: float | None = None
         window_started_at: float | None = None
         window_started_position: float | None = None
         latest_position: float | None = None
@@ -217,13 +221,21 @@ class ServoMotors:
 
                 # 新しいmechPos応答が無い周期を「停止」と誤認しない。
                 if received_position and latest_position is not None:
-                    if window_started_at is None or window_started_position is None:
+                    if motion_started_position is None:
+                        motion_started_position = latest_position
+                    elif not motion_confirmed:
+                        # mechPosが0/2πをまたいでも、最短角度差で実際の動きを判定する。
+                        moved_deg = abs(_phase_delta_degrees(latest_position - motion_started_position))
+                        if moved_deg >= max(1.0, stillness_deg * 2.0):
+                            motion_confirmed = True
+                            window_started_at = now
+                            window_started_position = latest_position
+                            print(f"{name}原点合わせ: 角度変化を確認しました。ストッパーを待ちます")
+                    elif window_started_at is None or window_started_position is None:
                         window_started_at = now
                         window_started_position = latest_position
                     elif now - window_started_at >= stillness_sec:
-                        moved_deg = abs(
-                            (latest_position - window_started_position) * 180.0 / 3.141592653589793
-                        )
+                        moved_deg = abs(_phase_delta_degrees(latest_position - window_started_position))
                         if moved_deg <= stillness_deg:
                             servo.set_home_radians(latest_position)
                             print(f"{name}原点合わせ完了: ストッパー位置を0度に登録しました")
@@ -241,6 +253,11 @@ class ServoMotors:
             raise TimeoutError(
                 f"{name}原点合わせ失敗: mechPos応答を1回も受信できませんでした。"
                 "CAN通信・モーター電源を確認してください"
+            )
+        if not motion_confirmed:
+            raise TimeoutError(
+                f"{name}原点合わせ失敗: 速度指令後もmechPosが変化しませんでした。"
+                "モーター出力・方向・機構の固着を確認してください"
             )
         raise TimeoutError(
             f"{name}原点合わせ失敗: {timeout_sec:.1f}秒間mechPosが動き続け、"
@@ -426,9 +443,33 @@ def open_servos(transport: PySerialTransport | None = None, reader: ATEncoderRea
     return ServoMotors(
         # PIDは小さい補正速度も必要。通常の手動モーター用の6%停止帯を
         # ここで使うと、最大5%の安全なPID出力がすべて0になってしまう。
-        catch=EncoderPositionServo(ATMotor(transport, catch_address, zero_hold_band=0.0), _config("catch")),
-        lift=EncoderPositionServo(ATMotor(transport, lift_address, zero_hold_band=0.0), _config("lift")),
+        # 足回り診断で実機動作を確認できた Type 1 motion control を機構にも使う。
+        # Type 18のパラメータ書込みだけでは、機構が停止したままでも原点合わせが
+        # 完了してしまうことがあったため、実際に速度を与える形式へ統一する。
+        catch=EncoderPositionServo(
+            ATMotor(
+                transport,
+                catch_address,
+                zero_hold_band=0.0,
+                velocity_value_frame_builder=build_mecanum_motion_control_value_frame,
+            ),
+            _config("catch"),
+        ),
+        lift=EncoderPositionServo(
+            ATMotor(
+                transport,
+                lift_address,
+                zero_hold_band=0.0,
+                velocity_value_frame_builder=build_mecanum_motion_control_value_frame,
+            ),
+            _config("lift"),
+        ),
         reader=reader,
         transport=transport,
         owns_transport=owns_transport,
     )
+
+
+def _phase_delta_degrees(delta_rad: float) -> float:
+    """2πの境界をまたいでも正しい、最短の角度差[deg]を返す。"""
+    return degrees(atan2(sin(delta_rad), cos(delta_rad)))
