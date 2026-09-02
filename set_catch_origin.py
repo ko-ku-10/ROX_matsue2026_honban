@@ -25,7 +25,11 @@ def main() -> None:
         print("=" * 56)
         input("安全を確認したら Enter: ")
 
-        servos.attach()
+        # liftは原点合わせしないだけでなく、enable/停止指令も送らない。
+        # catchだけを有効化するので、liftが予期せず動く経路を作らない。
+        servos.catch.motor.stop()
+        servos.catch.enable(retries=3)
+        servos.catch.motor.stop()
         servos.home_to_stop(
             "catch",
             speed_percent=hensuu.catch_homing_speed_percent,
@@ -38,7 +42,12 @@ def main() -> None:
         print(f"保存完了: {hensuu.servo_origin_file}")
         print("以後、catch.write(0) がこのストッパー位置になります。")
     finally:
-        servos.close()
+        # ``servos.close()`` はcatch/lift両方へ停止を送るため、ここでは使わない。
+        # catchだけを止めてからUSB-CANを閉じる。
+        try:
+            servos.catch.release()
+        finally:
+            servos.transport.close()
 
 
 if __name__ == "__main__":

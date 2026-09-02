@@ -18,7 +18,6 @@ from rox_mecanum import (
     PositionServoConfig,
     PySerialTransport,
     at_address_from_can_id,
-    build_mecanum_motion_control_value_frame,
 )
 
 
@@ -443,15 +442,13 @@ def open_servos(transport: PySerialTransport | None = None, reader: ATEncoderRea
     return ServoMotors(
         # PIDは小さい補正速度も必要。通常の手動モーター用の6%停止帯を
         # ここで使うと、最大5%の安全なPID出力がすべて0になってしまう。
-        # 足回り診断で実機動作を確認できた Type 1 motion control を機構にも使う。
-        # Type 18のパラメータ書込みだけでは、機構が停止したままでも原点合わせが
-        # 完了してしまうことがあったため、実際に速度を与える形式へ統一する。
+        # 機構の速度形式は、実機で調整済みの従来Type 18形式を維持する。
+        # 足回りで動いたType 1形式を、未検証のliftへ流用しない。
         catch=EncoderPositionServo(
             ATMotor(
                 transport,
                 catch_address,
                 zero_hold_band=0.0,
-                velocity_value_frame_builder=build_mecanum_motion_control_value_frame,
             ),
             _config("catch"),
         ),
@@ -460,7 +457,6 @@ def open_servos(transport: PySerialTransport | None = None, reader: ATEncoderRea
                 transport,
                 lift_address,
                 zero_hold_band=0.0,
-                velocity_value_frame_builder=build_mecanum_motion_control_value_frame,
             ),
             _config("lift"),
         ),
