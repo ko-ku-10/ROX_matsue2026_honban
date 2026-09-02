@@ -138,6 +138,9 @@ encoder_poll_hz = 100.0
 encoder_response_wait_sec = 0.015
 # この時間mechPos応答が来なければ保持出力を停止する（角度の推定はしない）。
 servo_feedback_timeout_sec = 0.25
+# GAME1〜3のターミナルへ生mechPosを表示する間隔[秒]。0なら表示しない。
+# PIDが既に受信した応答を表示するだけで、追加のCAN要求は送らない。
+game_mechpos_display_interval_sec = 1.0
 
 # 状態表示サイト: http://ロボットのIPアドレス:8000
 dashboard_port = 8000

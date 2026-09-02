@@ -37,6 +37,8 @@ class ServoMotors:
         self._thread: Thread | None = None
         # PIDスレッド内で起きた最後の通信例外。画面表示や原因確認に使える。
         self._pid_error: str | None = None
+        # PIDが最後に受信した正式mechPos応答。GAME画面の診断表示に使う。
+        self._latest_mechpos_feedback: dict[str, EncoderFeedback] = {}
 
     def attach(self) -> None:
         """2台を停止状態で有効化する。前回の速度指令による急発進を防ぐ。"""
@@ -270,8 +272,12 @@ class ServoMotors:
                 """到着済みの正式mechPosを該当サーボへ渡す。"""
                 for feedback in self.reader.poll(now):
                     if feedback.name == "catch":
+                        if feedback.position_rad is not None:
+                            self._latest_mechpos_feedback["catch"] = feedback
                         self.catch.update_feedback(feedback)
                     elif feedback.name == "lift":
+                        if feedback.position_rad is not None:
+                            self._latest_mechpos_feedback["lift"] = feedback
                         self.lift.update_feedback(feedback)
 
             now = time.monotonic()
@@ -295,6 +301,31 @@ class ServoMotors:
                     "lift PID安全停止: "
                     f"{self.lift.config.feedback_timeout_sec:.2f}秒間mechPos応答がありません"
                 )
+
+    def raw_mechpos_report(self) -> str:
+        """最新のmechPos応答をangle_monitor.py形式で文字列化する。
+
+        読取り要求は追加せず、PIDスレッドが受信済みのデータだけを使う。
+        「モーター位置」はfloat32の生4バイトをlittle-endian uint32として
+        表した10進数であり、通信確認用の値である。
+        """
+        with self._lock:
+            feedbacks = dict(self._latest_mechpos_feedback)
+
+        lines = ["[mechPos 生データ]"]
+        for name in ("catch", "lift"):
+            feedback = feedbacks.get(name)
+            frame = b"" if feedback is None else feedback.raw_at_frame
+            if len(frame) < 15:
+                lines.append(f"{name}: mechPos応答待ち")
+                continue
+            position_bytes = frame[11:15]
+            position_raw = int.from_bytes(position_bytes, "little")
+            lines.append(
+                f"{name}: モーター位置（変換なし・10進数）= {position_raw} "
+                f"/ mechPosバイト={' '.join(str(value) for value in position_bytes)}"
+            )
+        return "\n".join(lines)
 
     def start_pid(self, hz: float | None = None) -> None:
         """PID更新をバックグラウンドで開始する。以後 ``update()`` は不要。"""

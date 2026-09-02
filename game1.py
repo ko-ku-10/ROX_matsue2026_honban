@@ -101,6 +101,7 @@ def main() -> None:
         centered_since = None
         yaw_aligned_since = None
         shown_stage = None
+        next_mechpos_report_at = 0.0
 
         while True:
             loop_started = time.monotonic()
@@ -121,6 +122,13 @@ def main() -> None:
                 print(f"モード: {'自動' if mode.auto_enabled else '完全手動'}")
 
             auto = MotionCommand.stop()
+
+            if (
+                hensuu.game_mechpos_display_interval_sec > 0.0
+                and loop_started >= next_mechpos_report_at
+            ):
+                print(runtime.servos.raw_mechpos_report())
+                next_mechpos_report_at = loop_started + hensuu.game_mechpos_display_interval_sec
 
             # 手動走行中はカメラを一切読まない。重いAprilTag検出による
             # スティック操作のラグを防ぐ。↑を押した時と中心合わせ中だけ読む。

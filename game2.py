@@ -150,10 +150,18 @@ def main() -> None:
         last_position_report_at = 0.0
         filtered_robot_yaw = None
         shown_stage = None
+        next_mechpos_report_at = 0.0
 
         while True:
             loop_started = time.monotonic()
             state = runtime.controller.read()
+
+            if (
+                hensuu.game_mechpos_display_interval_sec > 0.0
+                and loop_started >= next_mechpos_report_at
+            ):
+                print(runtime.servos.raw_mechpos_report())
+                next_mechpos_report_at = loop_started + hensuu.game_mechpos_display_interval_sec
 
             # カメラ・Tag処理は別スレッド。手動中は映像表示だけにする。
             vision_worker.set_paused(

@@ -72,9 +72,17 @@ def main() -> None:
         move_started = time.monotonic()
         lift_action = None
         shown_stage = None
+        next_mechpos_report_at = 0.0
         while True:
             loop_started = time.monotonic()
             state = runtime.controller.read()
+
+            if (
+                hensuu.game_mechpos_display_interval_sec > 0.0
+                and loop_started >= next_mechpos_report_at
+            ):
+                print(runtime.servos.raw_mechpos_report())
+                next_mechpos_report_at = loop_started + hensuu.game_mechpos_display_interval_sec
 
             # GAME3はTagを使わない。映像表示は別スレッドで行う。
             if vision_worker is not None:
