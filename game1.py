@@ -65,7 +65,7 @@ def main() -> None:
     print("  タッチパッド: 手動 / 自動を切替")
     print("  CREATE: GAME1開始姿勢へ（liftはこの1回だけ動作）")
     print("  L1を押している間: 手動走行を低速化")
-    print("  手動モードの○: catchを掴む / □: catchを開く")
+    print("  手動モードの○: catchをドリブル姿勢 / □: catchを中間姿勢")
     print("  自動モードの↑: Tag8正面へ移動 → 距離1m → 2m通過")
     print("  OPTIONS: 非常停止")
 
@@ -168,8 +168,9 @@ def main() -> None:
                     runtime.servos.catch.write_mechpos_raw(robot_actions.CATCH_DRIBBLE_POSITION)
                     stage = "手動: catchをドリブル姿勢へ"
                 elif state.was_pressed(Button.SQUARE):
-                    runtime.servos.catch.write_mechpos_raw(robot_actions.CATCH_OPEN_POSITION)
-                    stage = "手動: catchを開く姿勢へ"
+                    # GAME1ではliftを追加で動かさず、catchだけを低速で中間へ開く。
+                    robot_actions.catch_middle_pose(runtime, lower_lift=False)
+                    stage = "手動: catchを中間姿勢へ"
 
             # ↑は操縦者の「ゲートを通る」承認ボタン。
             if start_gate:

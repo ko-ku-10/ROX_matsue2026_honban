@@ -30,7 +30,13 @@ CYLINDER_SWITCH_OFF_SEC = 0.02
 CATCH_OPEN_POSITION = 1052068812            # catchを開く位置
 # 実機確認済み: 下の2つは以前の名前と逆だったため、用途に合わせて設定する。
 CATCH_DRIBBLE_POSITION = 1063343419       # ボールを地面でドリブルする位置
+# ドリブルと開く位置のmechPosとして正しい中間位置。
+# 生の10進数を平均せず、両方のmechPos値を平均して作った値である。
+CATCH_MIDDLE_POSITION = 1058930064        # □で使う中間の開き具合
 CATCH_LIFT_POSITION = 1065810619         # ボールを持ち上げる時の位置
+# ドリブル姿勢から□で開く方向へ動かす時だけの速度。
+# 小さいほどゆっくり。目標到達後は通常のPID速度へ自動で戻る。
+CATCH_DRIBBLE_TO_OPEN_SPEED_PERCENT = 3.0
 LIFT_GROUND_POSITION = 3165714930         # 地面まで下ろす位置
 LIFT_UP_POSITION = 3217241157             # 持ち上げる位置
 
@@ -266,9 +272,19 @@ def game3_grab(runtime):
     servos.lift.write_mechpos_raw(LIFT_GROUND_POSITION)
     servos.catch.write_mechpos_raw(CATCH_DRIBBLE_POSITION)
 
-def game3_release(runtime):
-    """GAME3: □を押した時の排出動作。"""
+def catch_middle_pose(runtime, *, lower_lift: bool = True):
+    """□を押した時、catchをドリブルと全開の中間位置へ動かす。"""
     servos = runtime.servos
-    servos.lift.write_mechpos_raw(LIFT_GROUND_POSITION)
-    servos.catch.write_mechpos_raw(CATCH_OPEN_POSITION)
+    if lower_lift:
+        servos.lift.write_mechpos_raw(LIFT_GROUND_POSITION)
+    servos.move_mechpos_raw_with_temporary_speed(
+        "catch",
+        CATCH_MIDDLE_POSITION,
+        max_speed_percent=CATCH_DRIBBLE_TO_OPEN_SPEED_PERCENT,
+    )
+
+
+def game3_release(runtime):
+    """以前の関数名との互換用。現在は□と同じ中間姿勢へ動かす。"""
+    catch_middle_pose(runtime)
 

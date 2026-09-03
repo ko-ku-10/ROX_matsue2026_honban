@@ -39,6 +39,9 @@ class ServoMotors:
         self._pid_error: str | None = None
         # PIDが最後に受信した正式mechPos応答。GAME画面の診断表示に使う。
         self._latest_mechpos_feedback: dict[str, EncoderFeedback] = {}
+        # 一時的に速度を下げた機構の、通常速度とその時の目標角度。
+        # 目標に到達した時、または別の目標が出た時に通常速度へ戻す。
+        self._temporary_speed_restore: dict[str, tuple[float, float]] = {}
 
     def attach(self) -> None:
         """2台を停止状態で有効化する。前回の速度指令による急発進を防ぐ。"""
@@ -290,6 +293,7 @@ class ServoMotors:
             time.sleep(hensuu.encoder_response_wait_sec)
             now = time.monotonic()
             apply_feedbacks(now)
+            self._restore_temporary_speeds()
             # 応答が消えた時、古い速度を出し続けないための安全停止。
             if self.catch.watchdog(now):
                 print(
@@ -427,6 +431,38 @@ class ServoMotors:
                 max_speed=max_speed,
                 tolerance_deg=tolerance_deg,
             )
+
+    def move_mechpos_raw_with_temporary_speed(
+        self,
+        name: str,
+        raw_position: int,
+        *,
+        max_speed_percent: float,
+    ) -> float:
+        """指定位置へ一時的な低速で動かし、到達後は元の速度へ戻す。
+
+        例: ドリブル姿勢からcatchを少し開く時だけ反動を抑えたい場合に使う。
+        次の目標角度が出た場合も、その時点で通常速度へ戻す。
+        """
+        if not 0.0 < float(max_speed_percent) <= 100.0:
+            raise ValueError("max_speed_percent は0より大きく100以下にしてください")
+        with self._lock:
+            servo = self._servo(name)
+            # 一時低速の途中で別の一時動作が出ても、最初の通常速度を保持する。
+            normal_speed = self._temporary_speed_restore.get(name, (servo.config.max_speed, 0.0))[0]
+            servo.set_pid(max_speed=float(max_speed_percent) / 100.0)
+            target_angle = servo.write_mechpos_raw(raw_position)
+            self._temporary_speed_restore[name] = (normal_speed, target_angle)
+            return target_angle
+
+    def _restore_temporary_speeds(self) -> None:
+        """一時低速の機構が到達したら、PID速度を通常値へ戻す。ロック中に呼ぶ。"""
+        for name, (normal_speed, temporary_target) in tuple(self._temporary_speed_restore.items()):
+            servo = self._servo(name)
+            # 別の操作が新しい目標を出した場合も、遅い速度を持ち越さない。
+            if servo.target_angle != temporary_target or servo.is_at_target():
+                servo.set_pid(max_speed=normal_speed)
+                del self._temporary_speed_restore[name]
 
     def _servo(self, name: str) -> EncoderPositionServo:
         if name == "catch":

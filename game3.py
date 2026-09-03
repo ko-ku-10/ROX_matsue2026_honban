@@ -28,13 +28,13 @@ class Stage(str, Enum):
     GROUND = "地面走行姿勢へ移動中"
     DRIVE = "ドリブル走行可能"
     GRAB = "catchを掴む角度へ移動中"
-    RELEASE = "catchを排出角度へ移動中"
+    MIDDLE = "catchを中間角度へ移動中"
     LIFTING = "発射台へ持上げ中（CREATEでリセット）"
     FIRED = "動作完了: ×で地面姿勢へ戻す"
 
 
 def main() -> None:
-    print("GAME3: CREATE=ドリブル姿勢・持上げ中リセット / ○=ドリブル保持 / □=開く / △=持上げ / R1=発射 / L1=低速 / OPTIONS=停止")
+    print("GAME3: CREATE=ドリブル姿勢・持上げ中リセット / ○=ドリブル保持 / □=中間姿勢 / △=持上げ / R1=発射 / L1=低速 / OPTIONS=停止")
     runtime = None
     camera = None
     status_site = None
@@ -123,10 +123,10 @@ def main() -> None:
                 stage = Stage.GRAB
                 move_started = loop_started
 
-            # □: 排出動作。
+            # □: ドリブル姿勢と全開姿勢の中間へ動かす。
             elif state.was_pressed(Button.SQUARE):
-                robot_actions.game3_release(runtime)
-                stage = Stage.RELEASE
+                robot_actions.catch_middle_pose(runtime)
+                stage = Stage.MIDDLE
                 move_started = loop_started
 
             # △: GAME2と共通の持上げ動作。
@@ -150,16 +150,16 @@ def main() -> None:
                     print("地面走行姿勢の到達確認はできません。走行可能へ進みます")
                     stage = Stage.DRIVE
 
-            # ○は掴む姿勢で待機する。□のmachi姿勢は到着後も走行できる。
-            elif stage is Stage.GRAB or stage is Stage.RELEASE:
+            # ○は掴む姿勢で待機する。□の中間姿勢は到着後も走行できる。
+            elif stage is Stage.GRAB or stage is Stage.MIDDLE:
                 if robot_actions.is_within_move_tolerance(runtime.servos.catch):
-                    if stage is Stage.RELEASE:
+                    if stage is Stage.MIDDLE:
                         stage = Stage.DRIVE
                     else:
                         stage = Stage.WAIT
                 elif loop_started - move_started > MOVE_TIMEOUT_SEC:
                     print("catchの到達確認はできません。次の段階へ進みます")
-                    if stage is Stage.RELEASE:
+                    if stage is Stage.MIDDLE:
                         stage = Stage.DRIVE
                     else:
                         stage = Stage.WAIT

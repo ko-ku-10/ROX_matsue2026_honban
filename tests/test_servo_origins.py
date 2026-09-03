@@ -1,6 +1,7 @@
 import tempfile
 import unittest
 from pathlib import Path
+from struct import pack
 
 from rox_mecanum.feedback_servo import EncoderPositionServo, PositionServoConfig
 from servos import ServoMotors, _phase_delta_degrees
@@ -47,3 +48,18 @@ class ServoOriginTests(unittest.TestCase):
 
         self.assertAlmostEqual(restored.catch.home_position_rad, 1.25)
         self.assertAlmostEqual(restored.lift.home_position_rad, -2.5)
+
+    def test_temporary_catch_speed_returns_to_normal_at_target(self):
+        servos = make_servos()
+        servos.catch.set_home_radians(0.0)
+        normal_speed = servos.catch.config.max_speed
+        raw_position = int.from_bytes(pack("<f", 1.0), "little")
+
+        target = servos.move_mechpos_raw_with_temporary_speed(
+            "catch", raw_position, max_speed_percent=3.0
+        )
+        self.assertAlmostEqual(servos.catch.config.max_speed, 0.03)
+
+        servos.catch.current_angle = target
+        servos._restore_temporary_speeds()
+        self.assertAlmostEqual(servos.catch.config.max_speed, normal_speed)
