@@ -50,6 +50,10 @@ mecanum_command_reverse_guard_counts = 420
 mecanum_invert_forward_input = True
 # Falseなら右スティック左右だけで旋回する。L2/R2を押す必要はない。
 mecanum_rotation_requires_r2 = False
+# 右スティック最大時の旋回速度（0〜100%）。
+# 以前の22%では旋回が遅かったため、通常時は100%まで使う。
+# L1を押している間だけは mecanum_slow_mode_percent により低速になる。
+mecanum_rotation_speed_percent = 100.0
 # 横移動だけの最高速度（0〜100%）。前後・旋回の速度には影響しない。
 # 後ろが重くて横移動中に曲がる時は、まず50%程度から試す。
 mecanum_strafe_speed_percent = 50.0

@@ -63,11 +63,7 @@ def main() -> None:
             baudrate=hensuu.serial_baud,
             minimum_interval=0.0008,
         )
-        mixer = MecanumMixer(
-            rotation_gain=(
-                0.12 + 0.10
-            )
-        )
+        mixer = MecanumMixer(rotation_gain=hensuu.mecanum_rotation_speed_percent / 100.0)
         robot = MecanumRobot(
             transport,
             motor_ids={"FL": 0x0C, "FR": 0x14, "RL": 0x1C, "RR": 0x24},

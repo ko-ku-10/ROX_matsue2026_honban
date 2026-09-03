@@ -28,6 +28,10 @@ class MecanumTests(unittest.TestCase):
         self.assertEqual(mixer.wheel_speeds(forward=1.0).as_dict(), {"FL": 1.0, "FR": 1.0, "RL": 1.0, "RR": 1.0})
         self.assertEqual(mixer.wheel_speeds(strafe=1.0).as_dict(), {"FL": -1.0, "FR": 1.0, "RL": 1.0, "RR": -1.0})
 
+    def test_full_rotation_gain_uses_full_wheel_speed(self) -> None:
+        speeds = MecanumMixer(rotation_gain=1.0).wheel_speeds(rotate=1.0)
+        self.assertEqual(speeds.as_dict(), {"FL": -1.0, "FR": 1.0, "RL": -1.0, "RR": 1.0})
+
     def test_mixer_normalizes_combined_motion(self) -> None:
         speeds = MecanumMixer(rotation_gain=1.0).wheel_speeds(forward=1.0, strafe=1.0, rotate=1.0)
         self.assertEqual(speeds.as_dict(), {"FL": -1 / 3, "FR": 1.0, "RL": 1 / 3, "RR": 1 / 3})

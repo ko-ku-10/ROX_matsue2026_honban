@@ -36,7 +36,7 @@ class RobotRuntime:
             transport,
             motor_ids={"FL": 0x0C, "FR": 0x14, "RL": 0x1C, "RR": 0x24},
             motor_directions={"FL": 1.0, "FR": -1.0, "RL": 1.0, "RR": -1.0},
-            mixer=MecanumMixer(rotation_gain=0.22),
+            mixer=MecanumMixer(rotation_gain=hensuu.mecanum_rotation_speed_percent / 100.0),
             speed_span=_speed_span(hensuu.mecanum_speed_percent),
             acceleration_per_second=hensuu.mecanum_acceleration_percent_per_sec / 100.0,
             deceleration_per_second=hensuu.mecanum_deceleration_percent_per_sec / 100.0,
