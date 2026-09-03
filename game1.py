@@ -63,6 +63,7 @@ TAG8_SEARCH_TIMEOUT_SEC = 2.0
 def main() -> None:
     print("GAME1: 手動走行 + Tag8ゲート通過支援")
     print("  タッチパッド: 手動 / 自動を切替")
+    print("  CREATE: GAME1開始姿勢へ（liftはこの1回だけ動作）")
     print("  L1を押している間: 手動走行を低速化")
     print("  手動モードの○: catchを掴む / □: catchを開く")
     print("  自動モードの↑: Tag8正面へ移動 → 距離1m → 2m通過")
@@ -101,6 +102,7 @@ def main() -> None:
         tag_search_until = 0.0
         centered_since = None
         yaw_aligned_since = None
+        game1_start_pose_sent = False
         shown_stage = None
         next_mechpos_report_at = 0.0
 
@@ -151,6 +153,13 @@ def main() -> None:
             if start_gate:
                 vision_worker.request_tag_read()
             camera_error = vision_worker.error
+
+            # GAME1では開始時だけlift/catchを指定姿勢へ動かす。
+            # 一度実行した後は、GAME1からliftへ追加の命令を出さない。
+            if state.was_pressed(Button.CREATE) and not game1_start_pose_sent:
+                robot_actions.game1_start_pose(runtime)
+                game1_start_pose_sent = True
+                stage = "GAME1開始姿勢へ移動中"
 
             # GAME1の完全手動ではcatchだけを操作できる。
             # liftにはここから一切命令を出さない。

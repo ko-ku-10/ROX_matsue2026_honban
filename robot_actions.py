@@ -34,6 +34,13 @@ CATCH_LIFT_POSITION = 1065810619         # ボールを持ち上げる時の位�
 LIFT_GROUND_POSITION = 3165714930         # 地面まで下ろす位置
 LIFT_UP_POSITION = 3217241157             # 持ち上げる位置
 
+# GAME1だけはliftの取付方向が逆として扱う。
+# GAME1で「上げる」と言った時は通常の下ろす値を、
+# GAME1で「下げる」と言った時は通常の持ち上げる値を送る。
+# GAME2・GAME3の値と動作は変えない。
+GAME1_LIFT_UP_POSITION = LIFT_GROUND_POSITION
+GAME1_LIFT_GROUND_POSITION = LIFT_UP_POSITION
+
 # 指令した角度を待つ最大時間。超えたら停止せず次の動作へ進む。
 # 動作完了の判定には使わず、エンコーダーの実測角度で判定する。
 SERVO_MOVE_TIMEOUT_SEC = 1.0
@@ -95,7 +102,7 @@ def close_gpio():
 def game1_start_pose(runtime):
     """GAME1: CREATEを押した時の開始姿勢。"""
     servos = runtime.servos
-    servos.lift.write_mechpos_raw(LIFT_GROUND_POSITION)
+    servos.lift.write_mechpos_raw(GAME1_LIFT_UP_POSITION)
     servos.catch.write_mechpos_raw(CATCH_OPEN_POSITION)
 
 

@@ -146,10 +146,8 @@ class DualSenseMotionMapping:
     invert_forward: bool = False
     # 押している間だけ低速化するボタン。Noneなら低速モードを使わない。
     slow_mode_button: Button | None = None
-    # 低速時の前後・横移動の速度倍率。0.30なら通常の30%になる。
+    # 低速時の速度倍率。0.30なら前後・横移動・旋回とも通常の30%になる。
     slow_mode_gain: float = 1.0
-    # 低速時の旋回だけの速度倍率。Noneなら slow_mode_gain と同じにする。
-    slow_mode_rotation_gain: float | None = None
     # L2/R2のようなアナログトリガーを低速ボタンとして使う時の判定値。
     slow_mode_trigger_threshold: float = 0.20
 
@@ -158,8 +156,6 @@ class DualSenseMotionMapping:
             raise ValueError("strafe_gain は 0.0〜1.0 にしてください")
         if not 0.0 <= self.slow_mode_gain <= 1.0:
             raise ValueError("slow_mode_gain は 0.0〜1.0 にしてください")
-        if self.slow_mode_rotation_gain is not None and not 0.0 <= self.slow_mode_rotation_gain <= 1.0:
-            raise ValueError("slow_mode_rotation_gain は 0.0〜1.0 にしてください")
         if not 0.0 <= self.slow_mode_trigger_threshold <= 1.0:
             raise ValueError("slow_mode_trigger_threshold は 0.0〜1.0 にしてください")
 
@@ -173,14 +169,11 @@ class DualSenseMotionMapping:
             right = AnalogStick()
         slow_mode = self._slow_mode_active(state)
         translation_speed_gain = self.slow_mode_gain if slow_mode else 1.0
-        rotation_speed_gain = (
-            self.slow_mode_gain if self.slow_mode_rotation_gain is None else self.slow_mode_rotation_gain
-        ) if slow_mode else 1.0
         forward = _shape(left.y, self.response_exponent, self.translation_gain * translation_speed_gain)
         if self.invert_forward:
             forward = -forward
         strafe = _shape(left.x, self.response_exponent, self.translation_gain * self.strafe_gain * translation_speed_gain)
-        rotate = _shape(right.x, self.response_exponent, self.rotation_gain * rotation_speed_gain)
+        rotate = _shape(right.x, self.response_exponent, self.rotation_gain * translation_speed_gain)
         return MotionCommand(
             forward=forward,
             strafe=strafe,

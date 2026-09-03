@@ -54,11 +54,7 @@ def main() -> None:
             print("  R2 + 右スティック左右: 旋回")
         else:
             print("  右スティック左右: 旋回")
-        print(
-            f"  L1を押している間: 低速モード "
-            f"（移動{float(hensuu.mecanum_slow_mode_percent):.0f}% / "
-            f"旋回{float(hensuu.mecanum_slow_mode_rotation_percent):.0f}%）"
-        )
+        print(f"  L1を押している間: 低速モード（通常の{float(hensuu.mecanum_slow_mode_percent):.0f}%）")
         print("  OPTIONS: 停止して終了")
 
         controller = open_configured_dualsense()
@@ -96,7 +92,6 @@ def main() -> None:
             strafe_gain=hensuu.mecanum_strafe_speed_percent / 100.0,
             slow_mode_button=Button.L1,
             slow_mode_gain=hensuu.mecanum_slow_mode_percent / 100.0,
-            slow_mode_rotation_gain=hensuu.mecanum_slow_mode_rotation_percent / 100.0,
         )
 
         robot.enable_all(
